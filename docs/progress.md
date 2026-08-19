@@ -68,3 +68,7 @@ Format:
 [2026-08-19] F7 (works.md#7) Testimonials section - 3 quote cards, block-quote marks, gradient initials, staggered reveal - done
 [2026-08-19] F8 (works.md#8) Logo - shared Logo component (/public/images/logo.png via next/image, onError->gradient "L" fallback), swapped into navbar x2, footer, login x2, sidebar, dashboard mobile sheet; optimizer 200 verified - done
 [2026-08-19] F-VERIFY all 8 fixes - lint 0/0, build 10 routes incl. /dashboard/overview, all routes 200 on fresh port, logo srcset + /images/logo.png 200 - done
+[2026-08-20] F3-refine Sidebar per user edit - Overview item relabeled w/ AnalyticsIcon; "Home" nav item links to landing "/"; isActivePath special-cases "/" to exact match (prefix match lit Home on every dashboard page); lint + build clean — done
+[2026-08-20] G-47 GATE round 2: user verdict = MORE CHANGES NEEDED after F1-F8 — awaiting new fix list — open
+[2026-08-20] R-02 Write docs/summarized-chat.md — full session handoff (status, stack, architecture, mistakes/style/rules, strict next steps) for seeding a new chat — done
+[2026-08-20] R-03 Write docs/scripts/demo-v1.md — 9-scene ≤2 min demo video script (landing → login → all dashboard features) w/ real mock names/numbers, VO paced ~130 wpm, pre-record checklist + edit notes — done

@@ -35,6 +35,9 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export function isActivePath(pathname: string, href: string) {
+  // "/" (landing Home) must match exactly — a prefix match would light it up
+  // on every dashboard page.
+  if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");
 }
 

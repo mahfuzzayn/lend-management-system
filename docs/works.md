@@ -1,4 +1,8 @@
 # Fixes
+1. 
+
+
+# Completed
 1. Many cards in landing, dashboard pages has no x axis padding, detect, add and fix it.
     1. Also hero section right section tilted card too.
 2. In Practice section slider not showing properly its top bottom border of cards also right side and left side section of whole section possibly overflowing hidden so borders aren't visible fix it.
