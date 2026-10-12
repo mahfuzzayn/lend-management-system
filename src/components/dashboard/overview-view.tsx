@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   animate,
@@ -18,10 +18,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { overviewStats } from "@/lib/domain";
-import { useMockStore } from "@/lib/mock-store";
+import { api, errorMessage } from "@/lib/api-client";
 import { EASE_OUT, staggerItem, staggerParent } from "@/lib/motion";
 import { cn, formatCurrency, formatDate, getInitials } from "@/lib/utils";
+import type { OverviewStats } from "@/types";
 
 /** Animated number that counts up to `value` (respects reduced motion). */
 function CountUp({ value, format }: { value: number; format: (n: number) => string }) {
@@ -49,53 +49,73 @@ function greetingFor(hour: number) {
 }
 
 export function OverviewView() {
-  const { customers, transactions } = useMockStore();
-
-  // v1: simulate the request latency the skeletons are designed for.
+  const [stats, setStats] = useState<OverviewStats | null>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
 
-  const stats = useMemo(() => overviewStats(customers, transactions), [customers, transactions]);
+  useEffect(() => {
+    let cancelled = false;
+    // Skeletons only on the first load - reloads keep the current stats up.
+    api
+      .overview()
+      .then((result) => {
+        if (cancelled) return;
+        setStats(result);
+        setLoadError(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setLoadError(errorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadNonce]);
+
+  const reload = () => setReloadNonce((n) => n + 1);
 
   const now = new Date();
   const greeting = greetingFor(now.getHours());
 
-  const STAT_CARDS = [
-    {
-      label: "Total customers",
-      value: stats.totalCustomers,
-      format: (n: number) => String(n),
-      sub: `${stats.recentTransactions.length > 0 ? "ledger active" : "ledger empty"}`,
-      accent: "text-foreground",
-    },
-    {
-      label: "Total lent",
-      value: stats.totalLent,
-      format: (n: number) => formatCurrency(n),
-      sub: "money given out",
-      accent: "text-foreground",
-    },
-    {
-      label: "Total collected",
-      value: stats.totalCollected,
-      format: (n: number) => formatCurrency(n),
-      sub: "repayments received",
-      accent: "text-emerald-600",
-    },
-    {
-      label: "Outstanding due",
-      value: stats.totalOutstanding,
-      format: (n: number) => formatCurrency(n),
-      sub: stats.totalOutstanding > 0 ? "yet to collect" : "all square",
-      accent: stats.totalOutstanding > 0 ? "text-red-600" : "text-emerald-600",
-    },
-  ];
+  const STAT_CARDS = stats
+    ? [
+        {
+          label: "Total customers",
+          value: stats.totalCustomers,
+          format: (n: number) => String(n),
+          sub: `${stats.recentTransactions.length > 0 ? "ledger active" : "ledger empty"}`,
+          accent: "text-foreground",
+        },
+        {
+          label: "Total lent",
+          value: stats.totalLent,
+          format: (n: number) => formatCurrency(n),
+          sub: "money given out",
+          accent: "text-foreground",
+        },
+        {
+          label: "Total collected",
+          value: stats.totalCollected,
+          format: (n: number) => formatCurrency(n),
+          sub: "repayments received",
+          accent: "text-emerald-600",
+        },
+        {
+          label: "Outstanding due",
+          value: stats.totalOutstanding,
+          format: (n: number) => formatCurrency(n),
+          sub: stats.totalOutstanding > 0 ? "yet to collect" : "all square",
+          accent: stats.totalOutstanding > 0 ? "text-red-600" : "text-emerald-600",
+        },
+      ]
+    : [];
 
   return (
     <motion.div
@@ -125,6 +145,16 @@ export function OverviewView() {
           </Button>
         </div>
       </motion.div>
+
+      {loadError && !loading && (
+        <div className="flex flex-col items-center gap-2 border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
+          <p className="text-sm font-medium text-destructive">Couldn&apos;t load the overview.</p>
+          <p className="max-w-xs text-xs text-muted-foreground">{loadError}</p>
+          <Button variant="outline" className="mt-2" onClick={reload}>
+            Try again
+          </Button>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -176,14 +206,14 @@ export function OverviewView() {
                       <Skeleton className="h-3 w-16" />
                     </div>
                   ))
-                : stats.recentTransactions.length === 0 ? (
+                : (stats?.recentTransactions ?? []).length === 0 ? (
                     <div className="px-4 py-12 text-center">
                       <p className="text-xs text-muted-foreground">
                         Nothing recorded yet - the first entry starts the ledger.
                       </p>
                     </div>
                   )
-                : stats.recentTransactions.map((t) => (
+                : (stats?.recentTransactions ?? []).map((t) => (
                     <Link
                       key={t.id}
                       href={`/dashboard/customers/${t.customerId}`}
@@ -246,14 +276,14 @@ export function OverviewView() {
                       <Skeleton className="h-3 w-20" />
                     </div>
                   ))
-                : stats.topDues.length === 0 ? (
+                : (stats?.topDues ?? []).length === 0 ? (
                     <div className="px-4 py-12 text-center">
                       <p className="text-xs text-muted-foreground">
                         No outstanding dues - everyone&apos;s square.
                       </p>
                     </div>
                   )
-                : stats.topDues.map((c, index) => (
+                : (stats?.topDues ?? []).map((c, index) => (
                     <Link
                       key={c.id}
                       href={`/dashboard/customers/${c.id}`}
@@ -279,8 +309,8 @@ export function OverviewView() {
       </div>
 
       {/* Dialogs */}
-      <CustomerFormDialog open={addCustomerOpen} onOpenChange={setAddCustomerOpen} />
-      <TransactionFormDialog open={addTransactionOpen} onOpenChange={setAddTransactionOpen} />
+      <CustomerFormDialog open={addCustomerOpen} onOpenChange={setAddCustomerOpen} onSaved={reload} />
+      <TransactionFormDialog open={addTransactionOpen} onOpenChange={setAddTransactionOpen} onSaved={reload} />
     </motion.div>
   );
 }

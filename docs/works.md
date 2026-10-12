@@ -1,6 +1,17 @@
 # Fixes
 1. 
 
+# Backlog (memo — noted 2026-10-13)
+
+User's own updates & modifications — applied later by the user, NOT part of current phase work.
+When one is picked up it goes through `requirements.md` → `goals.md` first, then code.
+
+1. **DB models — new features/fields** (user to specify; candidate pool lives in requirements §15:
+   interest/EMI, soft-delete trash + restore, audit log, receipts, reminders…).
+2. **UI design update** — some sections still read "AI-generic"; push editorial distinctiveness
+   per requirements §9.1 (asymmetric compositions, specific copy, refined motion).
+3. **Feature improvements** — general feature polish/upgrades; list to be defined by the user.
+
 
 # Completed
 1. Many cards in landing, dashboard pages has no x axis padding, detect, add and fix it.

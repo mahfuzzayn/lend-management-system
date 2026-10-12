@@ -1,12 +1,16 @@
-import type { Customer, Transaction } from "../types";
+import type { Customer, Transaction } from "../src/types";
 
 /**
- * v1 mock dataset (requirements §3.1) - typed, deterministic, hand-checkable.
- * Deliberately includes every ledger shape the UI must handle:
- * due (c-01…), settled (c-03), advance/overpaid (c-04), archived (c-08),
- * back-dated entries (2025-11 →), and entries dated "today" (2026-08-19).
- *
- * Deleted in v2 when the API takes over.
+ * Demo dataset for `npm run seed -- --demo` (requirements §12).
+ * Moved from src/lib/mock-data.ts when v2 deleted the mock layer - the seed
+ * keeps using it so `--demo` restores the exact v1-review dataset:
+ * 10 customers incl. settled (c-03), advance (c-04), archived (c-08),
+ * and 41 transactions (2025-11 → 2026-08-19) with hand-verified dues:
+ *   c-01 → 4,500 · c-02 → 10,000 · c-03 → 0 (settled) · c-04 → −2,000 (advance)
+ *   c-05 → 5,000 · c-06 → 25,000 · c-07 → 4,500 · c-08 → 0 (archived, settled)
+ *   c-09 → 22,000 · c-10 → 5,000
+ * Overview (active only): lent 262,000 · collected 188,000 · outstanding 74,000.
+ * Ids here are mock ids - the seed maps them to fresh ObjectIds.
  */
 
 export const MOCK_CUSTOMERS: Customer[] = [
@@ -116,15 +120,6 @@ export const MOCK_CUSTOMERS: Customer[] = [
   },
 ];
 
-/**
- * 41 transactions. Amounts and dates chosen so expected dues are easy to
- * verify by hand (see docs/progress.md G-26):
- *   c-01 → 4,500 · c-02 → 10,000 · c-03 → 0 (settled) · c-04 → −2,000 (advance)
- *   c-05 → 5,000 · c-06 → 25,000 · c-07 → 4,500 · c-08 → 0 (archived, settled)
- *   c-09 → 22,000 · c-10 → 5,000
- * Overview (active customers only, archived c-08 excluded): lent 262,000 ·
- * collected 188,000 · outstanding 74,000.
- */
 export const MOCK_TRANSACTIONS: Transaction[] = [
   // c-01 Rahim Store - due 4,500
   { id: "t-001", customerId: "c-01", type: "lend", amount: 12000, date: "2026-07-04", method: "cash", note: "Weekly stock advance", createdAt: "2026-07-04T09:00:00.000Z" },

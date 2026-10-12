@@ -87,6 +87,17 @@ export interface Paginated<T> {
   total: number;
 }
 
+/** Totals over the FULL filtered scope, not just the current page (FR-7.6). */
+export interface TransactionFilterSummary {
+  count: number;
+  totalLent: number;
+  totalReceived: number;
+}
+
+export interface TransactionsPage extends Paginated<TransactionWithCustomer> {
+  summary: TransactionFilterSummary;
+}
+
 /** v2 only - API session info. */
 export interface Admin {
   id: string;

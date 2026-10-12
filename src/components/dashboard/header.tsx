@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -19,21 +19,51 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { mockLogout } from "@/lib/auth-mock";
-import { APP_NAME, DEMO_CREDENTIAL } from "@/lib/config";
-import { cn } from "@/lib/utils";
+import { ApiClientError, api, errorMessage } from "@/lib/api-client";
+import { APP_NAME } from "@/lib/config";
+import { cn, getInitials } from "@/lib/utils";
 import { NAV_ITEMS, isActivePath, navTitleFor } from "./sidebar";
+import type { Admin } from "@/types";
 
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const [admin, setAdmin] = useState<Admin | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
   const title = navTitleFor(pathname);
 
-  function handleLogout() {
-    mockLogout();
-    toast("Signed out - see you soon.");
-    router.replace("/login");
+  // Session info for the account menu; a 401 here means the session died
+  // mid-visit (expired) - back to the login page.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .me()
+      .then(({ admin: current }) => {
+        if (!cancelled) setAdmin(current);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        if (error instanceof ApiClientError && error.status === 401) {
+          router.replace(`/login?from=${encodeURIComponent(pathname)}`);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [router, pathname]);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await api.logout();
+      toast("Signed out - see you soon.");
+      router.replace("/login");
+    } catch (error) {
+      toast.error("Sign out failed.", { description: errorMessage(error) });
+    } finally {
+      setLoggingOut(false);
+    }
   }
 
   return (
@@ -83,15 +113,15 @@ export function Header() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex items-center gap-2 border px-2 py-1.5 text-xs transition-colors hover:bg-muted"
+              className="flex items-center gap-2 border px-2 py-1.5 text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
               aria-label="Account menu"
             >
               <Avatar className="size-5">
                 <AvatarFallback className="bg-primary text-[0.5rem] font-semibold text-primary-foreground">
-                  AD
+                  {admin ? getInitials(admin.name) : "··"}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden font-medium sm:inline">Admin</span>
+              <span className="hidden font-medium sm:inline">{admin?.name ?? "Admin"}</span>
               <HugeiconsIcon
                 icon={ArrowDown01Icon}
                 strokeWidth={2}
@@ -101,15 +131,15 @@ export function Header() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="flex flex-col gap-0.5">
-              <span className="text-xs font-medium">Admin</span>
+              <span className="text-xs font-medium">{admin?.name ?? "Admin"}</span>
               <span className="font-mono text-[0.625rem] font-normal text-muted-foreground">
-                {DEMO_CREDENTIAL.email}
+                {admin?.email ?? ""}
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} variant="destructive">
+            <DropdownMenuItem onClick={handleLogout} variant="destructive" disabled={loggingOut}>
               <HugeiconsIcon icon={Logout01Icon} strokeWidth={2} />
-              Sign out
+              {loggingOut ? "Signing out…" : "Sign out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

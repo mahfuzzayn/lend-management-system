@@ -19,6 +19,7 @@ export const customerSchema = z.object({
     .string()
     .trim()
     .regex(PHONE_RE, "Use digits, spaces, + and - only.")
+    .max(20, "Keep the phone number under 20 characters.")
     .refine((v) => v.replace(/\D/g, "").length >= 6, "Phone needs at least 6 digits."),
   email: z
     .string()
@@ -37,11 +38,30 @@ export const transactionSchema = z.object({
     .number()
     .positive("Amount must be greater than zero.")
     .max(99_999_999, "Amount is too large."),
-  date: z.string().regex(ISO_DATE_RE, "Pick a valid date."),
+  // Same rule the date input enforces (max=local today): back-datable, never
+  // future - with one UTC day of tolerance so users ahead of UTC can still
+  // record their own "today" after it turns tomorrow in UTC.
+  date: z
+    .string()
+    .regex(ISO_DATE_RE, "Pick a valid date.")
+    .refine(
+      (d) => d <= new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+      "Pick today or an earlier date."
+    ),
   method: z.enum(["cash", "bank", "mobile-banking", "other"]),
   note: z.string().trim().max(240, "Keep the note under 240 characters."),
 });
 export type TransactionFormValues = z.infer<typeof transactionSchema>;
+
+export const loginSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(EMAIL_RE, "Enter a valid e-mail address."),
+  password: z.string().min(8, "Password needs at least 8 characters."),
+});
+export type LoginFormValues = z.infer<typeof loginSchema>;
 
 /** Flatten a zod error into a `{ field: message }` record for inline display. */
 export function fieldErrors(error: z.ZodError): Record<string, string> {

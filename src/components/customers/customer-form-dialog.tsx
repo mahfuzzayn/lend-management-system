@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createCustomer, updateCustomer } from "@/lib/mock-store";
+import { ApiClientError, api, errorMessage } from "@/lib/api-client";
 import { customerSchema, fieldErrors } from "@/schemas";
 import type { Customer } from "@/types";
 
@@ -24,13 +24,15 @@ interface CustomerFormDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode. */
   customer?: Customer | null;
+  /** Called after a successful save so the caller can refetch. */
+  onSaved?: () => void;
 }
 
 /**
  * The form lives inside DialogContent, so it unmounts on close and remounts
  * fresh (with new props) on every open - no reset effects needed.
  */
-export function CustomerFormDialog({ open, onOpenChange, customer }: CustomerFormDialogProps) {
+export function CustomerFormDialog({ open, onOpenChange, customer, onSaved }: CustomerFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -42,7 +44,12 @@ export function CustomerFormDialog({ open, onOpenChange, customer }: CustomerFor
               : "A name and phone number is all a ledger needs to start."}
           </DialogDescription>
         </DialogHeader>
-        <CustomerForm key={customer?.id ?? "new"} customer={customer ?? null} onOpenChange={onOpenChange} />
+        <CustomerForm
+          key={customer?.id ?? "new"}
+          customer={customer ?? null}
+          onOpenChange={onOpenChange}
+          onSaved={onSaved}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -61,9 +68,11 @@ const EMPTY: FormState = { name: "", phone: "", email: "", address: "", notes: "
 function CustomerForm({
   customer,
   onOpenChange,
+  onSaved,
 }: {
   customer: Customer | null;
   onOpenChange: (open: boolean) => void;
+  onSaved?: () => void;
 }) {
   const editing = Boolean(customer);
   const [values, setValues] = useState<FormState>(
@@ -102,30 +111,22 @@ function CustomerForm({
     const data = parsed.data;
 
     setPending(true);
-    await new Promise((resolve) => setTimeout(resolve, 250)); // simulated latency
     try {
       if (editing && customer) {
-        updateCustomer(customer.id, {
-          name: data.name,
-          phone: data.phone,
-          email: data.email || undefined,
-          address: data.address || undefined,
-          notes: data.notes || undefined,
-        });
+        await api.updateCustomer(customer.id, data);
         toast.success("Customer updated", { description: data.name });
       } else {
-        const created = createCustomer({
-          name: data.name,
-          phone: data.phone,
-          email: data.email || undefined,
-          address: data.address || undefined,
-          notes: data.notes || undefined,
-        });
+        const created = await api.createCustomer(data);
         toast.success("Customer added", { description: created.name });
       }
       onOpenChange(false);
-    } catch {
-      toast.error("Something went wrong - nothing was saved.");
+      onSaved?.();
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 409) {
+        setErrors({ phone: error.message });
+      } else {
+        toast.error("Nothing was saved.", { description: errorMessage(error) });
+      }
     } finally {
       setPending(false);
     }

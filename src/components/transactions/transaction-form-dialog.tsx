@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -29,13 +29,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createTransaction, updateTransaction, useMockStore } from "@/lib/mock-store";
+import { api, errorMessage } from "@/lib/api-client";
 import { cn, formatCurrency } from "@/lib/utils";
 import { fieldErrors, transactionSchema } from "@/schemas";
 import type { Customer, PaymentMethod, Transaction, TransactionType } from "@/types";
 
 const METHODS: PaymentMethod[] = ["cash", "bank", "mobile-banking", "other"];
-const TODAY = () => new Date().toISOString().slice(0, 10);
+/** Local-calendar today (YYYY-MM-DD) - en-CA yields ISO order. UTC-based
+ *  toISOString would block the user's real "today" after ~6 pm in UTC+6. */
+const TODAY = () => new Date().toLocaleDateString("en-CA");
 
 interface TransactionFormDialogProps {
   open: boolean;
@@ -44,6 +46,8 @@ interface TransactionFormDialogProps {
   transaction?: Transaction | null;
   /** When set (customer detail quick-add), the customer is locked to this one. */
   fixedCustomer?: Customer | null;
+  /** Called after a successful save so the caller can refetch. */
+  onSaved?: () => void;
 }
 
 /**
@@ -55,6 +59,7 @@ export function TransactionFormDialog({
   onOpenChange,
   transaction,
   fixedCustomer,
+  onSaved,
 }: TransactionFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,6 +77,7 @@ export function TransactionFormDialog({
           transaction={transaction ?? null}
           fixedCustomer={fixedCustomer ?? null}
           onOpenChange={onOpenChange}
+          onSaved={onSaved}
         />
       </DialogContent>
     </Dialog>
@@ -82,13 +88,32 @@ function TransactionForm({
   transaction,
   fixedCustomer,
   onOpenChange,
+  onSaved,
 }: {
   transaction: Transaction | null;
   fixedCustomer: Customer | null;
   onOpenChange: (open: boolean) => void;
+  onSaved?: () => void;
 }) {
-  const { customers } = useMockStore();
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const editing = Boolean(transaction);
+
+  // Customer picker options - only needed when the customer is pickable.
+  useEffect(() => {
+    if (fixedCustomer) return;
+    let cancelled = false;
+    api
+      .listCustomers({ limit: 100 })
+      .then((result) => {
+        if (!cancelled) setCustomers(result.items);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) toast.error("Couldn't load customers.", { description: errorMessage(error) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fixedCustomer]);
 
   const [customerId, setCustomerId] = useState(
     () => transaction?.customerId ?? fixedCustomer?.id ?? ""
@@ -101,13 +126,10 @@ function TransactionForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
 
-  const activeCustomers = useMemo(
-    () => customers.filter((c) => c.status === "active"),
-    [customers]
-  );
+  // The list endpoint returns active customers by default.
   const customerNameById = useMemo(
-    () => new Map(activeCustomers.map((c) => [c.id, c.name])),
-    [activeCustomers]
+    () => new Map(customers.map((c) => [c.id, c.name])),
+    [customers]
   );
 
   function clearError(field: string) {
@@ -143,22 +165,22 @@ function TransactionForm({
     const data = parsed.data;
 
     setPending(true);
-    await new Promise((resolve) => setTimeout(resolve, 250)); // simulated latency
     try {
       if (editing && transaction) {
-        updateTransaction(transaction.id, data);
+        await api.updateTransaction(transaction.id, data);
         toast.success("Transaction updated", {
           description: `${data.type === "lend" ? "Lend" : "Repayment"} of ${formatCurrency(data.amount)}`,
         });
       } else {
-        createTransaction(data);
+        await api.createTransaction(data);
         toast.success(data.type === "lend" ? "Lend recorded" : "Repayment recorded", {
           description: `${formatCurrency(data.amount)} · ${data.date}`,
         });
       }
       onOpenChange(false);
-    } catch {
-      toast.error("Something went wrong - nothing was saved.");
+      onSaved?.();
+    } catch (error) {
+      toast.error("Nothing was saved.", { description: errorMessage(error) });
     } finally {
       setPending(false);
     }
@@ -196,7 +218,7 @@ function TransactionForm({
             />
             <ComboboxContent>
               <ComboboxList>
-                {activeCustomers.map((c) => (
+                {customers.map((c) => (
                   <ComboboxItem key={c.id} value={c.id}>
                     {c.name}
                   </ComboboxItem>
@@ -223,7 +245,7 @@ function TransactionForm({
               aria-checked={type === option}
               onClick={() => setType(option)}
               className={cn(
-                "flex h-7 items-center justify-center gap-1.5 text-xs font-medium transition-colors",
+                "flex h-7 items-center justify-center gap-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
                 type === option
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"

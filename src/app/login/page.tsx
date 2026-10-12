@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { LoginForm } from "@/components/auth/login-form";
 import { Logo } from "@/components/shared/logo";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { APP_NAME } from "@/lib/config";
 
 export const metadata: Metadata = {
@@ -20,7 +23,13 @@ function Wordmark({ inverted = false }: { inverted?: boolean }) {
   );
 }
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  // Already signed in? Straight to the dashboard (FR-2.3).
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (token && verifySessionToken(token)) {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="grid flex-1 lg:grid-cols-2">
       {/* Brand panel */}

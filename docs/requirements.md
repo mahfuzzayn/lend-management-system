@@ -58,7 +58,7 @@ There are **no other roles**. No public data access - all data is behind login.
 | Skeletons        | **shadcn `Skeleton`**                       | Every data-loading surface (see FR-10.3) |
 | API              | **Next.js Route Handlers** (`src/app/api/*`)| v2 (v1 uses mock data, no API) |
 | Database         | **MongoDB via Mongoose**                    | v2 - models in `src/models` |
-| Auth             | Credentials + **JWT** (httpOnly cookie) + middleware | v2 - bcrypt password hashing |
+| Auth             | **bcrypt** (hashing) + **jsonwebtoken** (JWT, httpOnly cookie) + proxy middleware | v2 - bcrypt cost ≥ 10; `@types/jsonwebtoken` as its TS types; approved by owner 2026-10-13 |
 | Forms & validation | **zod** (+ react-hook-form in v2)         | Shared schemas usable client- and server-side |
 | PDF export       | **React PDF Renderer** (`@react-pdf/renderer`, client-side) | Declarative PDF as React components; single-file download, no server rendering |
 | Deployment       | **Vercel** + **MongoDB Atlas**              | v2 |

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
@@ -33,36 +33,52 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { customerSummary, withRunningBalance } from "@/lib/domain";
-import { useMockStore } from "@/lib/mock-store";
+import { ApiClientError, api, errorMessage } from "@/lib/api-client";
 import { staggerItem, staggerParent } from "@/lib/motion";
 import { cn, formatCurrency, formatDate, getInitials } from "@/lib/utils";
+import type { CustomerDetail } from "@/types";
+
+type LoadState =
+  | { phase: "loading" }
+  | { phase: "error"; message: string }
+  | { phase: "not-found" }
+  | { phase: "ready"; data: CustomerDetail };
 
 export function CustomerDetailView({ customerId }: { customerId: string }) {
   const router = useRouter();
-  const { customers, transactions } = useMockStore();
-
-  // v1: simulated request latency for the skeleton pass.
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  const [state, setState] = useState<LoadState>({ phase: "loading" });
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addTxOpen, setAddTxOpen] = useState(false);
   const [pdfPending, setPdfPending] = useState(false);
 
-  const customer = customers.find((c) => c.id === customerId) ?? null;
-  const ownTransactions = useMemo(
-    () => transactions.filter((t) => t.customerId === customerId),
-    [transactions, customerId]
-  );
-  const ledger = useMemo(() => withRunningBalance(ownTransactions), [ownTransactions]);
-  const summary = useMemo(() => customerSummary(ownTransactions), [ownTransactions]);
+  useEffect(() => {
+    let cancelled = false;
+    // The "loading" phase only occurs on first mount; reloads after a mutation
+    // keep the current data on screen until the fresh payload lands.
+    api
+      .getCustomer(customerId)
+      .then((data) => {
+        if (!cancelled) setState({ phase: "ready", data });
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        if (error instanceof ApiClientError && error.status === 404) {
+          setState({ phase: "not-found" });
+        } else {
+          setState({ phase: "error", message: errorMessage(error) });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId, reloadNonce]);
 
-  if (loading) {
+  const reload = () => setReloadNonce((n) => n + 1);
+
+  if (state.phase === "loading") {
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-4 w-32" />
@@ -76,7 +92,19 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
     );
   }
 
-  if (!customer) {
+  if (state.phase === "error") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-center">
+        <p className="text-sm font-medium text-destructive">Couldn&apos;t load this customer.</p>
+        <p className="max-w-xs text-xs text-muted-foreground">{state.message}</p>
+        <Button variant="outline" className="mt-2" onClick={reload}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  if (state.phase === "not-found") {
     return (
       <div className="flex flex-col items-center gap-3 py-24 text-center">
         <span className="flex size-10 items-center justify-center border">
@@ -97,6 +125,8 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
       </div>
     );
   }
+
+  const { customer, summary, transactions: ledger } = state.data;
 
   return (
     <motion.div
@@ -307,10 +337,11 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
         open={editOpen}
         onOpenChange={setEditOpen}
         customer={customer}
+        onSaved={reload}
       />
       <DeleteCustomerDialog
         customer={deleteOpen ? customer : null}
-        transactionCount={ownTransactions.length}
+        transactionCount={ledger.length}
         onOpenChange={setDeleteOpen}
         onDeleted={() => {
           toast.info("Returning to the customer list.");
@@ -321,6 +352,7 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
         open={addTxOpen}
         onOpenChange={setAddTxOpen}
         fixedCustomer={customer}
+        onSaved={reload}
       />
     </motion.div>
   );

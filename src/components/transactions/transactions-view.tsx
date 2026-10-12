@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -28,11 +28,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { transactionsWithCustomer } from "@/lib/domain";
-import { useMockStore } from "@/lib/mock-store";
+import { api, errorMessage } from "@/lib/api-client";
 import { fadeUp } from "@/lib/motion";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import type { Transaction, TransactionWithCustomer, TransactionType } from "@/types";
+import type {
+  CustomerWithDue,
+  Transaction,
+  TransactionType,
+  TransactionsPage,
+} from "@/types";
 
 const PAGE_SIZE = 15;
 const SKELETON_ROWS = 8;
@@ -49,63 +53,73 @@ const NO_FILTERS: Filters = { customerId: "", type: "", from: "", to: "" };
 const FILTER_LABEL = "font-mono text-[0.5625rem] uppercase tracking-[0.15em] text-muted-foreground";
 
 export function TransactionsView() {
-  const { customers, transactions } = useMockStore();
-
-  // v1: simulate the request latency the skeletons are designed for.
+  const [data, setData] = useState<TransactionsPage | null>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
+
+  const [customerOptions, setCustomerOptions] = useState<CustomerWithDue[]>([]);
 
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  const [page, setPage] = useState({ key: "", index: 1 });
+  const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
-  const [deleting, setDeleting] = useState<TransactionWithCustomer | null>(null);
-
-  const rows = useMemo(
-    () => transactionsWithCustomer(transactions, customers),
-    [transactions, customers]
-  );
+  const [deleting, setDeleting] = useState<TransactionsPage["items"][number] | null>(null);
 
   const filtersActive =
     filters.customerId !== "" || filters.type !== "" || filters.from !== "" || filters.to !== "";
 
-  const filtered = useMemo(
-    () =>
-      rows.filter((r) => {
-        if (filters.customerId && r.customerId !== filters.customerId) return false;
-        if (filters.type && r.type !== filters.type) return false;
-        const day = r.date.slice(0, 10);
-        if (filters.from && day < filters.from) return false;
-        if (filters.to && day > filters.to) return false;
-        return true;
-      }),
-    [rows, filters]
-  );
+  useEffect(() => {
+    let cancelled = false;
+    // Skeletons only on the first load - refetches (filters/page/reload) keep
+    // the current rows on screen instead of flashing.
+    api
+      .listTransactions({
+        customerId: filters.customerId || undefined,
+        type: filters.type || undefined,
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+        page,
+        limit: PAGE_SIZE,
+      })
+      .then((result) => {
+        if (cancelled) return;
+        setData(result);
+        setLoadError(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setLoadError(errorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filters, page, reloadNonce]);
 
-  const summary = useMemo(() => {
-    let lent = 0;
-    let received = 0;
-    for (const r of filtered) {
-      if (r.type === "lend") lent += r.amount;
-      else received += r.amount;
-    }
-    return { count: filtered.length, lent, received };
-  }, [filtered]);
+  // Customer filter options (active customers only).
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listCustomers({ limit: 100 })
+      .then((result) => {
+        if (!cancelled) setCustomerOptions(result.items);
+      })
+      .catch(() => undefined); // filter list stays empty - not worth a toast
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const filterKey = `${filters.customerId}|${filters.type}|${filters.from}|${filters.to}`;
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = page.key === filterKey ? Math.min(page.index, pageCount) : 1;
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
-  function goToPage(index: number) {
-    setPage({ key: filterKey, index });
-  }
+  const reload = () => setReloadNonce((n) => n + 1);
+  const rows = data?.items ?? [];
+  const summary = data?.summary;
 
   function setFilter(patch: Partial<Filters>) {
     setFilters((f) => ({ ...f, ...patch }));
+    setPage(1); // any filter change restarts from the first page
   }
 
   return (
@@ -124,13 +138,11 @@ export function TransactionsView() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All customers</SelectItem>
-                {customers
-                  .filter((c) => c.status === "active")
-                  .map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
+                {customerOptions.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </label>
@@ -177,7 +189,7 @@ export function TransactionsView() {
           </label>
 
           {filtersActive && (
-            <Button variant="ghost" size="sm" onClick={() => setFilters(NO_FILTERS)}>
+            <Button variant="ghost" size="sm" onClick={() => setFilter(NO_FILTERS)}>
               Reset
             </Button>
           )}
@@ -189,13 +201,13 @@ export function TransactionsView() {
         </Button>
       </div>
 
-      {/* Summary line for the current filter scope */}
+      {/* Summary line for the current filter scope (server-computed, FR-7.6) */}
       <p className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
-        {loading ? "…" : (
+        {loading || !summary ? "…" : (
           <>
             {summary.count} entr{summary.count === 1 ? "y" : "ies"} ·{" "}
-            <span className="text-foreground">lent {formatCurrency(summary.lent)}</span> ·{" "}
-            <span className="text-emerald-600">repaid {formatCurrency(summary.received)}</span>
+            <span className="text-foreground">lent {formatCurrency(summary.totalLent)}</span> ·{" "}
+            <span className="text-emerald-600">repaid {formatCurrency(summary.totalReceived)}</span>
           </>
         )}
       </p>
@@ -227,7 +239,7 @@ export function TransactionsView() {
                     <TableCell><Skeleton className="ml-auto h-6 w-14" /></TableCell>
                   </TableRow>
                 ))
-              : paginated.map((row) => (
+              : rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="text-xs">{formatDate(row.date)}</TableCell>
                     <TableCell>
@@ -291,25 +303,23 @@ export function TransactionsView() {
         </Table>
 
         {/* Footer: pagination or empty state */}
-        {!loading && filtered.length === 0 ? (
+        {!loading && rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 border-t px-6 py-14 text-center">
             <p className="text-sm font-medium">
-              {rows.length === 0
-                ? "No transactions yet."
-                : "Nothing matches these filters."}
+              {!filtersActive ? "No transactions yet." : "Nothing matches these filters."}
             </p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              {rows.length === 0
+              {!filtersActive
                 ? "Record the first lend or repayment - the ledger starts there."
                 : "Widen the date range or clear a filter or two."}
             </p>
-            {rows.length === 0 ? (
+            {!filtersActive ? (
               <Button variant="outline" className="mt-2" onClick={() => setCreateOpen(true)}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
                 Add transaction
               </Button>
             ) : (
-              <Button variant="outline" className="mt-2" onClick={() => setFilters(NO_FILTERS)}>
+              <Button variant="outline" className="mt-2" onClick={() => setFilter(NO_FILTERS)}>
                 Reset filters
               </Button>
             )}
@@ -318,14 +328,14 @@ export function TransactionsView() {
           !loading && (
             <div className="flex items-center justify-between border-t px-4 py-3">
               <p className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
-                page {currentPage} / {pageCount}
+                page {data?.page ?? 1} / {data?.totalPages ?? 1}
               </p>
               <div className="flex gap-1.5">
                 <Button
                   variant="outline"
                   size="icon-xs"
-                  disabled={currentPage <= 1}
-                  onClick={() => goToPage(Math.max(1, currentPage - 1))}
+                  disabled={page <= 1}
+                  onClick={() => setPage(Math.max(1, page - 1))}
                   aria-label="Previous page"
                 >
                   <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="rotate-180" />
@@ -333,8 +343,8 @@ export function TransactionsView() {
                 <Button
                   variant="outline"
                   size="icon-xs"
-                  disabled={currentPage >= pageCount}
-                  onClick={() => goToPage(Math.min(pageCount, currentPage + 1))}
+                  disabled={page >= (data?.totalPages ?? 1)}
+                  onClick={() => setPage(Math.min(data?.totalPages ?? 1, page + 1))}
                   aria-label="Next page"
                 >
                   <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
@@ -345,16 +355,24 @@ export function TransactionsView() {
         )}
       </Card>
 
+      {loadError && (
+        <p className="text-center font-mono text-[0.625rem] uppercase tracking-[0.15em] text-destructive">
+          {loadError}
+        </p>
+      )}
+
       {/* Dialogs */}
-      <TransactionFormDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <TransactionFormDialog open={createOpen} onOpenChange={setCreateOpen} onSaved={reload} />
       <TransactionFormDialog
         open={Boolean(editing)}
         onOpenChange={(open) => !open && setEditing(null)}
         transaction={editing}
+        onSaved={reload}
       />
       <DeleteTransactionDialog
         transaction={deleting}
         onOpenChange={(open) => !open && setDeleting(null)}
+        onDeleted={reload}
       />
     </motion.div>
   );

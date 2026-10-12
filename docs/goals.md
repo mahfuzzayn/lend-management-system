@@ -92,46 +92,46 @@ Generated from `docs/requirements.md` v1.1 (§13.3). This is the build checklist
 ## Phase 11 - v1 Review 🔒 GATE
 
 - [x] G-46 Full pass: lint + build + walkthrough of every item in requirements §14.1 (incl. design-quality + animation checks)
-- [ ] G-47 **USER SIGN-OFF** on design + features → then **ask the user to push to GitHub manually** - no v2 work before sign-off
+- [x] G-47 GATE closed 2026-10-13 - user authorized carrying on to v2 phases; own review updates/modifications deferred to the user (memo'd in works.md #Backlog); v1 committed by user (66cc508, b1876d8) - any further push stays manual on their side
 
 ## Phase 12 - v2 Data Layer
 
-- [ ] G-48 Install mongoose (only new package for v2, per requirements §2); `src/lib/db.ts` connection cache (serverless-safe)
-- [ ] G-49 Mongoose models: `Admin`, `Customer`, `Transaction` per requirements §5 (fields, enums, Decimal128, indexes, timestamps)
-- [ ] G-50 Zod schemas in `src/schemas/`: customer, transaction, login - shared client/server
-- [ ] G-51 Seed script (`npm run seed`): admin from env + `--demo` flag; commit `.env.example`
+- [x] G-48 Install mongoose (only new package for v2, per requirements §2); `src/lib/db.ts` connection cache (serverless-safe)
+- [x] G-49 Mongoose models: `Admin`, `Customer`, `Transaction` per requirements §5 (fields, enums, Decimal128, indexes, timestamps)
+- [x] G-50 Zod schemas in `src/schemas/`: customer, transaction, login - shared client/server
+- [x] G-51 Seed script (`npm run seed`): admin from env + `--demo` flag; commit `.env.example`
 
 ## Phase 13 - v2 API
 
-- [ ] G-52 `src/lib/api.ts`: response envelope + error helpers (401/409/422/500 shapes)
-- [ ] G-53 `/api/auth/{login,logout,me}`
-- [ ] G-54 `/api/customers`: list (search + pagination + derived dues), create (duplicate phone → 409)
-- [ ] G-55 `/api/customers/[id]`: detail (summary + history w/ running balance), PATCH, DELETE cascade
-- [ ] G-56 `/api/transactions` + `/api/transactions/[id]`: CRUD, filters, pagination
-- [ ] G-57 `/api/dues` + `/api/overview` aggregations
-- [ ] G-58 Exercise every endpoint (REST client) incl. 401/422/409 paths
+- [x] G-52 `src/lib/api.ts`: response envelope + error helpers (401/409/422/500 shapes)
+- [x] G-53 `/api/auth/{login,logout,me}`
+- [x] G-54 `/api/customers`: list (search + pagination + derived dues), create (duplicate phone → 409)
+- [x] G-55 `/api/customers/[id]`: detail (summary + history w/ running balance), PATCH, DELETE cascade
+- [x] G-56 `/api/transactions` + `/api/transactions/[id]`: CRUD, filters, pagination
+- [x] G-57 `/api/dues` + `/api/overview` aggregations
+- [x] G-58 Exercise every endpoint (REST client) incl. 401/422/409 paths
 
 ## Phase 14 - v2 Auth
 
-- [ ] G-59 `src/lib/auth.ts`: bcrypt verify, JWT sign/verify (httpOnly SameSite cookie), `JWT_SECRET` env
-- [ ] G-60 `proxy.ts` (Next 16's renamed middleware): guard `/dashboard/:path*` + all `/api/*` except login
-- [ ] G-61 Login rate limit: ≤ 5 failed attempts / 10 min / IP (in-memory)
-- [ ] G-62 Real logout + redirect flows verified in browser
+- [x] G-59 `src/lib/auth.ts`: bcrypt verify, JWT sign/verify (httpOnly SameSite cookie), `JWT_SECRET` env
+- [x] G-60 `proxy.ts` (Next 16's renamed middleware): guard `/dashboard/:path*` + all `/api/*` except login
+- [x] G-61 Login rate limit: ≤ 5 failed attempts / 10 min / IP (in-memory)
+- [x] G-62 Real logout + redirect flows verified in browser
 
 ## Phase 15 - v2 Migration
 
-- [ ] G-63 Swap customers pages from mock data → API (keep skeletons, add error toasts)
-- [ ] G-64 Swap transactions, dues, overview pages → API
-- [ ] G-65 Real login flow wired; delete `mock-data.ts` + `auth-mock.ts`
-- [ ] G-66 PDF verified against live DB data
+- [x] G-63 Swap customers pages from mock data → API (keep skeletons, add error toasts)
+- [x] G-64 Swap transactions, dues, overview pages → API
+- [x] G-65 Real login flow wired; delete `mock-data.ts` + `auth-mock.ts`
+- [x] G-66 PDF verified against live DB data
 
 ## Phase 16 - Hardening
 
-- [ ] G-67 Validation-parity pass: client messages match server 422 reasons
-- [ ] G-68 Accessibility pass: labels, focus rings, contrast, badges not color-only, reduced-motion honored
-- [ ] G-69 Responsive sweep: every page 360 px → desktop
-- [ ] G-70 README: setup, env vars, seed, deploy + complete `.env.example`
-- [ ] G-71 Final lint + build + full §14.2 checklist locally
+- [x] G-67 Validation-parity pass: client messages match server 422 reasons
+- [x] G-68 Accessibility pass: labels, focus rings, contrast, badges not color-only, reduced-motion honored
+- [x] G-69 Responsive sweep: every page 360 px → desktop
+- [x] G-70 README: setup, env vars, seed, deploy + complete `.env.example`
+- [x] G-71 Final lint + build + full §14.2 checklist locally
 
 ## Phase 17 - Deploy
 

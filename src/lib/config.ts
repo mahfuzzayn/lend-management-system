@@ -12,15 +12,3 @@ export const APP_DESCRIPTION =
 
 /** Currency symbol used by formatCurrency() and the PDF export. Default: BDT. */
 export const CURRENCY_SYMBOL = "৳";
-
-/**
- * v1 mock-auth credential (shown on the login page).
- * v2: the seed script creates the real admin from env vars using the same values.
- */
-export const DEMO_CREDENTIAL = {
-  email: "admin@lendbook.morlabs.co",
-  password: "12345678",
-} as const;
-
-/** localStorage key for the v1 mock session flag. */
-export const MOCK_SESSION_KEY = "lendbook.mock-session";

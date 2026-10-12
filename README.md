@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lendbook - Lend Management System
 
-## Getting Started
+A lightweight web app for a single administrator (a money lender) to track
+customers, money lent, repayments, and the resulting outstanding dues - with
+one-click export of any customer's full history as a single PDF.
 
-First, run the development server:
+**Core ideas**
+
+- **Append-only ledger** - balances are *always derived* (`Σ lend − Σ
+  repayment`), never stored; deleting a customer cascades their transactions.
+- **Single admin** - no roles, no self-registration, no public data access.
+- **One PDF** - a customer's complete current history as one client-generated file.
+
+Full specification: [`docs/requirements.md`](docs/requirements.md) ·
+execution plan: [`docs/goals.md`](docs/goals.md) · work log:
+[`docs/progress.md`](docs/progress.md).
+
+## Stack
+
+| Layer | Technology |
+| --- | --- |
+| Framework | Next.js 16.3 (App Router, TypeScript strict, Turbopack) |
+| UI | shadcn/ui (radix-mira style, vendored in `src/components/ui`) + Tailwind CSS v4 |
+| Animations | Motion (`motion/react`) - respects `prefers-reduced-motion` |
+| Database | MongoDB (Atlas) via Mongoose 9 |
+| Auth | bcrypt (cost 12) + JWT (jsonwebtoken, HS256) in an httpOnly SameSite=Lax cookie, guarded by `src/proxy.ts` |
+| Validation | zod schemas shared between the forms and the API (`src/schemas`) |
+| PDF | `@react-pdf/renderer`, generated client-side |
+
+## Getting started
+
+Requirements: **Node.js ≥ 22.18** (the seed script runs TypeScript natively)
+and npm.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env    # then fill in the values (see below)
+npm run seed            # creates the first admin from ADMIN_* env vars
+                        # add --demo to also load 10 sample customers + 41 transactions
+npm run dev             # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sign in at `/login` with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you seeded.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Scope | Notes |
+| --- | --- | --- |
+| `MONGODB_URI` | server | Atlas connection string (include the database name) |
+| `JWT_SECRET` | server | ≥ 32 random chars - `openssl rand -base64 48` |
+| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | seed | consumed by `npm run seed` |
+| `NEXT_PUBLIC_APP_NAME` | client | display name ("Lendbook") |
 
-## Learn More
+`.env` is git-ignored; `.env.example` documents every variable.
 
-To learn more about Next.js, take a look at the following resources:
+### Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | dev server (Turbopack) |
+| `npm run build` / `npm start` | production build / serve |
+| `npm run lint` | ESLint (0 errors / 0 warnings expected) |
+| `npm run seed` | upsert the admin; `--demo` also (re)loads the sample ledger |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Security notes
 
-## Deploy on Vercel
+- Sessions: 24 h JWT cookie, httpOnly + SameSite=Lax, Secure in production,
+  with a sliding refresh (re-issued past half its TTL while active).
+- Login rate limit: **≤ 5 failed attempts per 10 minutes per IP**, in-memory.
+  On serverless this is per-instance - it blunts brute force, not a hard
+  guarantee; a shared store would need an extra dependency.
+- All mutating endpoints validate with the shared zod schemas before touching
+  the database; Mongoose models add a second validation layer.
+- Passwords are bcrypt-hashed (cost 12) and never returned by the API.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deploying (Vercel + Atlas)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Create a MongoDB Atlas cluster + database user; allow access from Vercel's
+   egress (or `0.0.0.0/0` for simplicity), copy the connection string.
+2. Import this repo into Vercel; set the env vars above in the project
+   settings (`JWT_SECRET` must be a fresh production value).
+3. Deploy, then seed the production admin once from any machine with the
+   production env:
+   `MONGODB_URI=... ADMIN_NAME=... ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run seed`
+4. Smoke-test the deployed URL: login, dashboard sections, CRUD, PDF export.
+
+## Project layout
+
+```
+src/
+├── app/            (landing) group, /login, /dashboard/*, api/* route handlers
+├── components/     ui (vendored shadcn), landing, dashboard, customers,
+│                   transactions, dues, pdf, shared
+├── lib/            api-client, auth, db, domain (pure calculators), config,
+│                   motion, rate-limit, serialize, utils
+├── models/         Mongoose: Admin, Customer, Transaction
+├── schemas/        shared zod schemas (client + server)
+└── proxy.ts        auth guard for /dashboard/* and /api/*
+scripts/            seed.ts (+ demo-data.ts for --demo)
+docs/               requirements.md, goals.md, progress.md, works.md
+```

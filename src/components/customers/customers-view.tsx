@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -28,59 +28,53 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDebounced } from "@/hooks/use-debounced";
-import { customersWithDue } from "@/lib/domain";
-import { useMockStore } from "@/lib/mock-store";
+import { api, errorMessage } from "@/lib/api-client";
 import { fadeUp } from "@/lib/motion";
 import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
-import type { CustomerWithDue } from "@/types";
+import type { CustomerWithDue, Paginated } from "@/types";
 
 const PAGE_SIZE = 10;
 const SKELETON_ROWS = 6;
 
 export function CustomersView() {
-  const { customers, transactions } = useMockStore();
-
-  // v1: simulate the request latency the v1 skeletons are designed for.
+  const [data, setData] = useState<Paginated<CustomerWithDue> | null>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounced(query, 300);
-  const [page, setPage] = useState({ search: "", index: 1 });
+  const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerWithDue | null>(null);
   const [deleting, setDeleting] = useState<CustomerWithDue | null>(null);
 
-  const rows = useMemo(
-    () =>
-      customersWithDue(
-        customers.filter((c) => c.status === "active"),
-        transactions
-      ).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [customers, transactions]
-  );
+  useEffect(() => {
+    let cancelled = false;
+    // Skeletons only on the first load - refetches (search/page/reload) keep
+    // the current rows on screen instead of flashing.
+    api
+      .listCustomers({ search: debouncedQuery.trim(), page, limit: PAGE_SIZE })
+      .then((result) => {
+        if (cancelled) return;
+        setData(result);
+        setLoadError(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setLoadError(errorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, page, reloadNonce]);
 
-  const normalized = debouncedQuery.trim().toLowerCase();
-  const filtered = normalized
-    ? rows.filter(
-        (r) =>
-          r.name.toLowerCase().includes(normalized) || r.phone.toLowerCase().includes(normalized)
-      )
-    : rows;
-
-  // Page is scoped to the current search: changing the search derives page 1
-  // without an effect (page state remembers which search it belongs to).
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage =
-    page.search === normalized ? Math.min(page.index, pageCount) : 1;
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
-  function goToPage(index: number) {
-    setPage({ search: normalized, index });
-  }
+  const reload = () => setReloadNonce((n) => n + 1);
+  const rows = data?.items ?? [];
+  const searching = debouncedQuery.trim().length > 0;
 
   return (
     <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex flex-col gap-4">
@@ -94,7 +88,10 @@ export function CustomersView() {
           />
           <Input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1); // new search starts from the first page
+            }}
             placeholder="Search name or phone…"
             className="pl-8"
             aria-label="Search customers"
@@ -102,7 +99,7 @@ export function CustomersView() {
         </div>
         <div className="flex items-center gap-3">
           <p className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
-            {loading ? "…" : `${filtered.length} customer${filtered.length === 1 ? "" : "s"}`}
+            {loading ? "…" : `${data?.total ?? 0} customer${data?.total === 1 ? "" : "s"}`}
           </p>
           <Button onClick={() => setCreateOpen(true)}>
             <HugeiconsIcon icon={UserAdd01Icon} strokeWidth={2} data-icon="inline-start" />
@@ -111,7 +108,18 @@ export function CustomersView() {
         </div>
       </div>
 
+      {loadError && (
+        <div className="flex flex-col items-center gap-2 border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
+          <p className="text-sm font-medium text-destructive">Couldn&apos;t load customers.</p>
+          <p className="max-w-xs text-xs text-muted-foreground">{loadError}</p>
+          <Button variant="outline" className="mt-2" onClick={reload}>
+            Try again
+          </Button>
+        </div>
+      )}
+
       {/* Table card */}
+      {!loadError && (
       <Card className="gap-0 p-0">
         <Table>
           <TableHeader>
@@ -158,7 +166,7 @@ export function CustomersView() {
                     </TableCell>
                   </TableRow>
                 ))
-              : paginated.map((row) => (
+              : rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell>
                       <Link
@@ -224,17 +232,17 @@ export function CustomersView() {
         </Table>
 
         {/* Footer: pagination or empty state */}
-        {!loading && filtered.length === 0 ? (
+        {!loading && rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 border-t px-6 py-14 text-center">
             <p className="text-sm font-medium">
-              {normalized ? "No customers match that search." : "No customers yet."}
+              {searching ? "No customers match that search." : "No customers yet."}
             </p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              {normalized
+              {searching
                 ? "Try a different name or phone number."
                 : "Add your first customer - a name and phone number is enough to start a ledger."}
             </p>
-            {!normalized && (
+            {!searching && (
               <Button variant="outline" className="mt-2" onClick={() => setCreateOpen(true)}>
                 <HugeiconsIcon icon={UserAdd01Icon} strokeWidth={2} data-icon="inline-start" />
                 Add customer
@@ -245,14 +253,14 @@ export function CustomersView() {
           !loading && (
             <div className="flex items-center justify-between border-t px-4 py-3">
               <p className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
-                page {currentPage} / {pageCount}
+                page {data?.page ?? 1} / {data?.totalPages ?? 1}
               </p>
               <div className="flex gap-1.5">
                 <Button
                   variant="outline"
                   size="icon-xs"
-                  disabled={currentPage <= 1}
-                  onClick={() => goToPage(Math.max(1, currentPage - 1))}
+                  disabled={page <= 1}
+                  onClick={() => setPage(Math.max(1, page - 1))}
                   aria-label="Previous page"
                 >
                   <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="rotate-180" />
@@ -260,8 +268,8 @@ export function CustomersView() {
                 <Button
                   variant="outline"
                   size="icon-xs"
-                  disabled={currentPage >= pageCount}
-                  onClick={() => goToPage(Math.min(pageCount, currentPage + 1))}
+                  disabled={page >= (data?.totalPages ?? 1)}
+                  onClick={() => setPage(Math.min(data?.totalPages ?? 1, page + 1))}
                   aria-label="Next page"
                 >
                   <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
@@ -271,22 +279,20 @@ export function CustomersView() {
           )
         )}
       </Card>
+      )}
 
       {/* Dialogs */}
-      <CustomerFormDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CustomerFormDialog open={createOpen} onOpenChange={setCreateOpen} onSaved={reload} />
       <CustomerFormDialog
         open={Boolean(editing)}
         onOpenChange={(open) => !open && setEditing(null)}
         customer={editing}
+        onSaved={reload}
       />
       <DeleteCustomerDialog
         customer={deleting}
-        transactionCount={
-          deleting
-            ? transactions.filter((t) => t.customerId === deleting.id).length
-            : 0
-        }
         onOpenChange={(open) => !open && setDeleting(null)}
+        onDeleted={reload}
       />
     </motion.div>
   );

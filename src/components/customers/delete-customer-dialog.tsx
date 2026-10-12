@@ -13,13 +13,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { deleteCustomerCascade } from "@/lib/mock-store";
+import { api } from "@/lib/api-client";
 import type { Customer } from "@/types";
 
 interface DeleteCustomerDialogProps {
   customer: Customer | null;
-  /** Transaction count to state in the warning (derived by the caller). */
-  transactionCount: number;
+  /** Transaction count to state in the warning (derived by the caller, when known). */
+  transactionCount?: number;
   onOpenChange: (open: boolean) => void;
   /** Called after a successful deletion (e.g. navigate back to the list). */
   onDeleted?: (id: string) => void;
@@ -37,17 +37,23 @@ export function DeleteCustomerDialog({
   async function handleConfirm() {
     if (!customer) return;
     setPending(true);
-    await new Promise((resolve) => setTimeout(resolve, 250)); // simulated latency
-    const { transactionsRemoved } = deleteCustomerCascade(customer.id);
-    setPending(false);
-    onOpenChange(false);
-    toast.success("Customer deleted", {
-      description:
-        transactionsRemoved > 0
-          ? `${customer.name} and ${transactionsRemoved} transaction${transactionsRemoved > 1 ? "s" : ""} removed permanently.`
-          : `${customer.name} removed permanently.`,
-    });
-    onDeleted?.(customer.id);
+    try {
+      const { transactionsDeleted: transactionsRemoved } = await api.deleteCustomer(customer.id);
+      onOpenChange(false);
+      toast.success("Customer deleted", {
+        description:
+          transactionsRemoved > 0
+            ? `${customer.name} and ${transactionsRemoved} transaction${transactionsRemoved > 1 ? "s" : ""} removed permanently.`
+            : `${customer.name} removed permanently.`,
+      });
+      onDeleted?.(customer.id);
+    } catch (error) {
+      toast.error("Customer was not deleted.", {
+        description: error instanceof Error ? error.message : "Try again.",
+      });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -57,7 +63,7 @@ export function DeleteCustomerDialog({
           <AlertDialogTitle>Delete {customer?.name}?</AlertDialogTitle>
           <AlertDialogDescription>
             This permanently removes the customer
-            {transactionCount > 0
+            {transactionCount
               ? ` and their ${transactionCount} transaction${transactionCount > 1 ? "s" : ""}`
               : " and their transaction history"}
             . Dues and history cannot be recovered afterwards.

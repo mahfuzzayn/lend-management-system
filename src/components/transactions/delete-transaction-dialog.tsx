@@ -13,18 +13,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { deleteTransaction } from "@/lib/mock-store";
+import { api } from "@/lib/api-client";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { TransactionWithCustomer } from "@/types";
 
 interface DeleteTransactionDialogProps {
   transaction: TransactionWithCustomer | null;
   onOpenChange: (open: boolean) => void;
+  /** Called after a successful deletion so the caller can refetch. */
+  onDeleted?: () => void;
 }
 
 export function DeleteTransactionDialog({
   transaction,
   onOpenChange,
+  onDeleted,
 }: DeleteTransactionDialogProps) {
   const [pending, setPending] = useState(false);
   const open = Boolean(transaction);
@@ -32,13 +35,20 @@ export function DeleteTransactionDialog({
   async function handleConfirm() {
     if (!transaction) return;
     setPending(true);
-    await new Promise((resolve) => setTimeout(resolve, 250)); // simulated latency
-    deleteTransaction(transaction.id);
-    setPending(false);
-    onOpenChange(false);
-    toast.success("Transaction deleted", {
-      description: "Dues and balances have been recalculated.",
-    });
+    try {
+      await api.deleteTransaction(transaction.id);
+      onOpenChange(false);
+      toast.success("Transaction deleted", {
+        description: "Dues and balances have been recalculated.",
+      });
+      onDeleted?.();
+    } catch (error) {
+      toast.error("Entry was not deleted.", {
+        description: error instanceof Error ? error.message : "Try again.",
+      });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

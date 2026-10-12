@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
+import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon, Download04Icon, Search01Icon } from "@hugeicons/core-free-icons";
 
@@ -24,44 +25,48 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDebounced } from "@/hooks/use-debounced";
-import { customersWithDue, customerSummary, withRunningBalance } from "@/lib/domain";
-import { useMockStore } from "@/lib/mock-store";
+import { api, errorMessage } from "@/lib/api-client";
 import { fadeUp } from "@/lib/motion";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
+import type { CustomerWithDue } from "@/types";
 
 const SKELETON_ROWS = 6;
 
 export function DuesView() {
-  const { customers, transactions } = useMockStore();
-
-  // v1: simulate the request latency the skeletons are designed for.
+  const [rows, setRows] = useState<CustomerWithDue[] | null>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounced(query, 300);
   const [showSettled, setShowSettled] = useState(false);
 
-  const rows = useMemo(() => {
-    const active = customersWithDue(
-      customers.filter((c) => c.status === "active"),
-      transactions
-    );
-    return active
-      .filter((r) => (showSettled ? true : r.due > 0))
-      .sort((a, b) => b.due - a.due || a.name.localeCompare(b.name));
-  }, [customers, transactions, showSettled]);
+  useEffect(() => {
+    let cancelled = false;
+    // Skeletons only on the first load - refetches keep the rows on screen.
+    api
+      .dues({ search: debouncedQuery.trim(), onlyWithDue: !showSettled })
+      .then((result) => {
+        if (cancelled) return;
+        setRows(result);
+        setLoadError(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setLoadError(error instanceof Error ? error.message : "Something went wrong.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, showSettled, reloadNonce]);
 
-  const normalized = debouncedQuery.trim().toLowerCase();
-  const filtered = normalized
-    ? rows.filter(
-        (r) =>
-          r.name.toLowerCase().includes(normalized) || r.phone.toLowerCase().includes(normalized)
-      )
-    : rows;
+  const reload = () => setReloadNonce((n) => n + 1);
+  const filtered = useMemo(() => rows ?? [], [rows]);
+  const searching = debouncedQuery.trim().length > 0;
 
   const totals = useMemo(() => {
     let lent = 0;
@@ -74,6 +79,25 @@ export function DuesView() {
     }
     return { lent, received, outstanding };
   }, [filtered]);
+
+  async function handleRowPdf(row: CustomerWithDue) {
+    try {
+      const detail = await api.getCustomer(row.id);
+      await downloadCustomerHistoryPdf({
+        customer: detail.customer,
+        summary: detail.summary,
+        ledger: detail.transactions,
+      });
+    } catch (error) {
+      // downloadCustomerHistoryPdf toasts its own generation failures;
+      // anything here is the ledger fetch itself failing.
+      if (!(error instanceof Error && error.message.includes("PDF"))) {
+        toast.error("Couldn't load the ledger for the PDF.", {
+          description: errorMessage(error),
+        });
+      }
+    }
+  }
 
   return (
     <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex flex-col gap-4">
@@ -191,12 +215,7 @@ export function DuesView() {
                           size="icon-xs"
                           aria-label={`Download history PDF for ${row.name}`}
                           onClick={() => {
-                            const own = transactions.filter((t) => t.customerId === row.id);
-                            void downloadCustomerHistoryPdf({
-                              customer: row,
-                              summary: customerSummary(own),
-                              ledger: withRunningBalance(own),
-                            }).catch(() => undefined);
+                            void handleRowPdf(row);
                           }}
                         >
                           <HugeiconsIcon icon={Download04Icon} strokeWidth={2} />
@@ -233,17 +252,27 @@ export function DuesView() {
           )}
         </Table>
 
-        {!loading && filtered.length === 0 && (
+        {!loading && loadError && (
+          <div className="flex flex-col items-center gap-2 border-t px-6 py-14 text-center">
+            <p className="text-sm font-medium text-destructive">Couldn&apos;t load dues.</p>
+            <p className="max-w-xs text-xs text-muted-foreground">{loadError}</p>
+            <Button variant="outline" className="mt-2" onClick={reload}>
+              Try again
+            </Button>
+          </div>
+        )}
+
+        {!loading && !loadError && filtered.length === 0 && (
           <div className="flex flex-col items-center gap-2 border-t px-6 py-14 text-center">
             <p className="text-sm font-medium">
-              {normalized
+              {searching
                 ? "No customers match that search."
                 : showSettled
                   ? "No customers yet."
                   : "No outstanding dues - everyone's square."}
             </p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              {normalized
+              {searching
                 ? "Try a different name or phone number."
                 : showSettled
                   ? "Customers appear here once you start lending."
