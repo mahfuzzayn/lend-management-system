@@ -57,7 +57,7 @@ export function GranularityToggle({
   onChange: (next: FlowGranularity) => void;
 }) {
   return (
-    <div className="flex border p-0.5" role="radiogroup" aria-label="Flow chart granularity">
+    <div className="flex rounded-md border p-0.5" role="radiogroup" aria-label="Flow chart granularity">
       {(["week", "month", "year"] as const).map((option) => (
         <button
           key={option}
@@ -66,7 +66,7 @@ export function GranularityToggle({
           aria-checked={value === option}
           onClick={() => onChange(option)}
           className={cn(
-            "h-6 px-2.5 text-[0.625rem] font-medium uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+            "h-6 rounded-xs px-2.5 text-[0.625rem] font-medium uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
             value === option
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground"

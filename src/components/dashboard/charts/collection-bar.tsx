@@ -36,16 +36,16 @@ export function CollectionBar({ summary }: { summary: CustomerSummary }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(collectedPct)}
-        className="flex h-3 w-full overflow-hidden rounded-sm bg-(--brand-secondary)/15"
+        className="flex h-3 w-full overflow-hidden rounded-full bg-(--brand-secondary)/15"
       >
         <div
-          className="h-full rounded-sm bg-emerald-600 transition-[width] duration-500"
+          className="h-full rounded-full bg-emerald-600 transition-[width] duration-500"
           style={{ width: `${collectedPct}%` }}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className="flex items-center justify-between gap-2 border px-3 py-2 sm:flex-col sm:items-start sm:justify-start">
+        <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 sm:flex-col sm:items-start sm:justify-start">
           <span className="flex items-center gap-1.5 font-mono text-[0.5625rem] uppercase tracking-[0.15em] text-muted-foreground">
             <span aria-hidden className="size-2 rounded-xs bg-(--brand-secondary)" />
             lent out
@@ -54,7 +54,7 @@ export function CollectionBar({ summary }: { summary: CustomerSummary }) {
             {formatCurrency(lent)}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-2 border px-3 py-2 sm:flex-col sm:items-start sm:justify-start">
+        <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 sm:flex-col sm:items-start sm:justify-start">
           <span className="flex items-center gap-1.5 font-mono text-[0.5625rem] uppercase tracking-[0.15em] text-muted-foreground">
             <span aria-hidden className="size-2 rounded-xs bg-emerald-500" />
             repaid
@@ -63,7 +63,7 @@ export function CollectionBar({ summary }: { summary: CustomerSummary }) {
             {formatCurrency(collected)}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-2 border px-3 py-2 sm:flex-col sm:items-start sm:justify-start">
+        <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 sm:flex-col sm:items-start sm:justify-start">
           <span className="font-mono text-[0.5625rem] uppercase tracking-[0.15em] text-muted-foreground">
             {advance ? "advance" : "due"}
           </span>

@@ -43,8 +43,8 @@ export function Hero() {
             variants={fadeUpLg}
             className="text-balance text-5xl font-semibold leading-[1.04] tracking-[-0.03em] sm:text-6xl lg:text-7xl"
           >
-            Know exactly who <span className="bg-primary px-3 text-primary-foreground">owes</span>{" "}
-            you.
+            Know exactly who{" "}
+            <span className="rounded-xs bg-primary px-3 text-primary-foreground">owes</span> you.
           </motion.h1>
 
           <motion.p

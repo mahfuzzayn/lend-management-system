@@ -40,6 +40,7 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --radius-xs: calc(var(--radius) * 0.4);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -85,7 +86,9 @@
   --chart-4: #c98500;
   --chart-5: #d55181;
   --chart-6: #008300;
-  --radius: 0;
+  /* Comfortable rounded scale (works.md F29): sm 6 / md 8 / lg 10 / xl 14 px.
+     Every rounded-* class derives from this one value - calm UI, one knob. */
+  --radius: 0.625rem;
   --sidebar: oklch(0.982 0.008 272);
   --sidebar-foreground: oklch(0.16 0.01 270);
   --sidebar-primary: var(--brand-primary);

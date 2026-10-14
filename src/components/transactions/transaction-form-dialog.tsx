@@ -89,7 +89,7 @@ function AddedByField({
           <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} className="size-3.5" />
         </button>
         {open && suggestions.length > 0 && (
-          <div className="absolute top-full right-0 left-0 z-30 mt-1 border bg-popover p-1 shadow-md">
+          <div className="absolute top-full right-0 left-0 z-30 mt-1 rounded-lg border bg-popover p-1 shadow-md">
             {suggestions.map((name) => (
               <button
                 key={name}
@@ -256,7 +256,7 @@ function TransactionForm({
       {fixedCustomer ? (
         <div className="flex flex-col gap-2">
           <Label>Customer</Label>
-          <div className="flex h-9 items-center justify-between border bg-muted/40 px-2.5">
+          <div className="flex h-9 items-center justify-between rounded-md border bg-muted/40 px-2.5">
             <span className="text-xs font-medium">{fixedCustomer.name}</span>
             <span className="font-mono text-[0.625rem] uppercase tracking-wider text-muted-foreground">
               locked
@@ -285,7 +285,7 @@ function TransactionForm({
       {/* Type - segmented */}
       <div className="flex flex-col gap-2">
         <Label>Type</Label>
-        <div className="grid grid-cols-2 border p-1" role="radiogroup" aria-label="Transaction type">
+        <div className="grid grid-cols-2 rounded-md border p-1" role="radiogroup" aria-label="Transaction type">
           {(["lend", "repayment"] as const).map((option) => (
             <button
               key={option}
@@ -294,7 +294,7 @@ function TransactionForm({
               aria-checked={type === option}
               onClick={() => setType(option)}
               className={cn(
-                "flex h-7 items-center justify-center gap-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+                "flex h-7 items-center justify-center gap-1.5 rounded-xs text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
                 type === option
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"

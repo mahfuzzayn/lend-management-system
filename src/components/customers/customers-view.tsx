@@ -286,7 +286,7 @@ export function CustomersView({ role }: { role: AdminRole }) {
       </div>
 
       {loadError && (
-        <div className="flex flex-col items-center gap-2 border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
           <p className="text-sm font-medium text-destructive">Couldn&apos;t load customers.</p>
           <p className="max-w-xs text-xs text-muted-foreground">{loadError}</p>
           <Button variant="outline" className="mt-2" onClick={reload}>

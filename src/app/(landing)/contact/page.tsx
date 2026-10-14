@@ -48,8 +48,8 @@ export default function ContactPage() {
           />
           <ul className="flex flex-col gap-4">
             {CHANNELS.map((channel) => (
-              <li key={channel.label} className="flex items-center gap-4 border p-4">
-                <span className="flex size-10 shrink-0 items-center justify-center border bg-background">
+              <li key={channel.label} className="flex items-center gap-4 rounded-lg border p-4">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-background">
                   <HugeiconsIcon icon={channel.icon} strokeWidth={1.75} className="size-4.5" />
                 </span>
                 <div className="min-w-0">

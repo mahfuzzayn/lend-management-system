@@ -113,7 +113,7 @@ export function Header() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex items-center gap-2 border px-2 py-1.5 text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+              className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
               aria-label="Account menu"
             >
               <Avatar className="size-5">

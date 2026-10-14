@@ -110,7 +110,7 @@ function ContactRow({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="flex size-7 shrink-0 items-center justify-center border bg-muted/40 text-muted-foreground">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-sm border bg-muted/40 text-muted-foreground">
         <HugeiconsIcon icon={icon} strokeWidth={2} className="size-3.5" />
       </span>
       <a
@@ -234,7 +234,7 @@ export function CustomerDetailView({
   if (state.phase === "not-found") {
     return (
       <div className="flex flex-col items-center gap-3 py-24 text-center">
-        <span className="flex size-10 items-center justify-center border">
+        <span className="flex size-10 items-center justify-center rounded-lg border">
           <HugeiconsIcon icon={LeftToRightListBulletIcon} strokeWidth={1.75} className="size-4.5 text-muted-foreground" />
         </span>
         <div>
@@ -323,7 +323,7 @@ export function CustomerDetailView({
       </div>
 
       {trashed && (
-        <div className="flex flex-col items-start gap-2 border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-amber-900">
             This customer is in the trash - restored ledger math excludes them
             {role === "super-admin"
@@ -349,7 +349,7 @@ export function CustomerDetailView({
         <motion.div variants={staggerItem} className="flex min-w-0 flex-col gap-4">
           <Card className="gap-4">
             <div className="flex items-start gap-3">
-              <span className="flex size-12 shrink-0 items-center justify-center bg-muted text-sm font-semibold">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-semibold">
                 {getInitials(customer.name)}
               </span>
               <div className="min-w-0 flex-1">

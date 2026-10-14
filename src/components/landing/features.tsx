@@ -67,7 +67,7 @@ export function Features() {
             <StaggerItem key={feature.num}>
               <Card className="h-full transition-transform duration-300 hover:-translate-y-1">
                 <div className="flex items-start justify-between">
-                  <span className="flex size-10 items-center justify-center border bg-background">
+                  <span className="flex size-10 items-center justify-center rounded-lg border bg-background">
                     <HugeiconsIcon icon={feature.icon} strokeWidth={1.75} className="size-4.5" />
                   </span>
                   <span className="font-mono text-xs text-muted-foreground/60">{feature.num}</span>

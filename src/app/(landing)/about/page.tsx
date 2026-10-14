@@ -83,7 +83,7 @@ export default function AboutPage() {
             {AUDIENCE.map((item) => (
               <StaggerItem key={item.title}>
                 <Card className="h-full transition-transform duration-300 hover:-translate-y-1">
-                  <span className="flex size-10 items-center justify-center border bg-background">
+                  <span className="flex size-10 items-center justify-center rounded-lg border bg-background">
                     <HugeiconsIcon icon={item.icon} strokeWidth={1.75} className="size-4.5" />
                   </span>
                   <p className="text-sm font-semibold tracking-tight">{item.title}</p>
@@ -108,7 +108,7 @@ export default function AboutPage() {
               <StaggerItem key={item.num}>
                 <Card className="h-full transition-transform duration-300 hover:-translate-y-1">
                   <div className="flex items-start justify-between">
-                    <span className="flex size-10 items-center justify-center border bg-background">
+                    <span className="flex size-10 items-center justify-center rounded-lg border bg-background">
                       <HugeiconsIcon icon={item.icon} strokeWidth={1.75} className="size-4.5" />
                     </span>
                     <span className="font-mono text-xs text-muted-foreground/60">{item.num}</span>

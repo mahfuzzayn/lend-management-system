@@ -1,4 +1,5 @@
 # Fixes
+1. I want easy design upgrade. All types of button, tables, link buttons, input fields, basically every section that has sharp edges we need to make them more comfortable ui, calm.
 
 _(empty - project closed as v2 FINAL 2026-10-14 after rounds F1-F28; v3 opens a fresh cycle - see # Backlog and goals.md "v3 Kickoff")_
 

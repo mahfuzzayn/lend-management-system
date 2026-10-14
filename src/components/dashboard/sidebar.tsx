@@ -101,7 +101,7 @@ export function Sidebar({
               aria-current={active ? "page" : undefined}
               title={item.label}
               className={cn(
-                "flex items-center text-xs transition-colors",
+                "flex items-center rounded-md text-xs transition-colors",
                 collapsed ? "justify-center px-0 py-2.5" : "gap-2.5 px-3 py-2",
                 active
                   ? "bg-linear-to-r from-(--grad-from) to-(--grad-to) text-primary-foreground"
@@ -146,7 +146,7 @@ export function Sidebar({
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-pressed={collapsed}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="flex size-7 items-center justify-center border text-muted-foreground transition-all duration-300 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 active:translate-y-px"
+          className="flex size-7 items-center justify-center rounded-sm border text-muted-foreground transition-all duration-300 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 active:translate-y-px"
         >
           <HugeiconsIcon
             icon={SidebarLeft01Icon}
