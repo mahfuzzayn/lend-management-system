@@ -138,7 +138,7 @@ export function Sidebar({
             collapsed && "hidden"
           )}
         >
-          {APP_NAME} · v2.1
+          Lendbook · v2.1
         </p>
         <button
           type="button"
