@@ -1,12 +1,24 @@
 # Lend Management System - Requirements Specification
 
-| Field    | Value                                      |
-| -------- | ------------------------------------------ |
-| Version  | 1.1                                        |
-| Date     | 2026-08-19                                 |
-| Status   | Approved for v1 execution                  |
-| Owner    | Mahfuz Zayn                                |
-| Repo     | `lend-management-system` (Next.js 16.3.1)  |
+| Field    | Value                                                       |
+| -------- | ----------------------------------------------------------- |
+| Version  | 1.4                                                         |
+| Date     | 2026-10-14                                                  |
+| Status   | v1 + v2 delivered - production: https://lendbook.morlabs.co |
+| Owner    | Mahfuz Zayn                                                 |
+| Repo     | `lend-management-system` (Next.js 16.3.1)                   |
+
+> v1.3 (works.md fix round F1-F7): master-sheet data model (customer codes,
+> business fields, risk/recovery, added-by), CSV/JSON exports, PDF redesign,
+> responsive sweep, shadcn Calendar date picker, searchable customer picker.
+
+> v1.4 (works.md fix round F8-F16): RBAC roles (Admin / Super Admin) with a
+> soft-delete Trash (restore + super-admin purge), overview charts, richer
+> search filters, date-picker month/year dropdowns + manual entry, 404 page.
+> v1.4 (works.md fix round F17-F21): chart granularity toggle + per-customer
+> charts + collection bar, scrollable dialogs, named greeting, suggested
+> added-by, brand-token palette (#15088f / #f30608 / #150590) driving every
+> gradient.
 
 > This document is the single source of truth. It will be **executed** to build the project.
 > Any scope change must be reflected here first, then in `goals.md`.
@@ -32,16 +44,20 @@ A minimal, fast dashboard where the admin:
 5. Downloads one customer's complete current history as **one single PDF**.
 
 ### 1.4 Users & Roles
-| Role  | Count | Access |
-| ----- | ----- | ------ |
-| Admin | 1     | Everything: all dashboard pages, all CRUD, PDF export |
+| Role        | Count     | Access |
+| ----------- | --------- | ------ |
+| Admin       | ≥ 1       | Everything except permanent deletes: all dashboard pages, create/edit, PDF/CSV export, soft delete (Trash), restore from Trash |
+| Super Admin | ≥ 1       | Everything an Admin can do **plus** permanent delete (purge) of trashed customers/transactions |
 
-There are **no other roles**. No public data access - all data is behind login.
+Both roles sign in the same way; the role is a field on the `Admin` document
+(§5.4) carried inside the session JWT. No public data access - all data is
+behind login. There is no self-registration; admins are seeded from env or
+created via the seed script / directly in the DB by the owner.
 
 ### 1.5 Scope Summary
-**In scope:** landing site (Home / About / Contact), login, dashboard (Overview, Customers, Transactions, Due Summaries), per-customer PDF export, admin authentication.
+**In scope:** landing site (Home / About / Contact), login, dashboard (Overview + charts, Customers, Transactions, Due Summaries), per-customer PDF export, admin authentication, RBAC roles with soft-delete Trash, CSV/JSON export, 404 page.
 
-**Out of scope (see §15):** multi-user roles, interest/EMI calculations, reminders (SMS/e-mail), multi-currency, reports beyond the customer PDF, dark mode, charts.
+**Out of scope (see §15):** interest/EMI calculations, reminders (SMS/e-mail), multi-currency, reports beyond the customer PDF, dark mode.
 
 ---
 
@@ -56,6 +72,7 @@ There are **no other roles**. No public data access - all data is behind login.
 | Animations       | **Framer Motion / Motion** (`motion` package, `motion/react`) | Section reveals, card/text micro-interactions, dashboard motion |
 | Carousel         | **Embla Carousel** (powers shadcn `Carousel`) | Landing-page carousel sections |
 | Skeletons        | **shadcn `Skeleton`**                       | Every data-loading surface (see FR-10.3) |
+| Charts           | **shadcn `Chart`** (wraps the pre-approved `recharts`) | Overview charts only (v1.4), lazy-loaded client-side |
 | API              | **Next.js Route Handlers** (`src/app/api/*`)| v2 (v1 uses mock data, no API) |
 | Database         | **MongoDB via Mongoose**                    | v2 - models in `src/models` |
 | Auth             | **bcrypt** (hashing) + **jsonwebtoken** (JWT, httpOnly cookie) + proxy middleware | v2 - bcrypt cost ≥ 10; `@types/jsonwebtoken` as its TS types; approved by owner 2026-10-13 |
@@ -175,26 +192,44 @@ src/
 | Field       | Type                 | Required | Notes |
 | ----------- | -------------------- | -------- | ----- |
 | `name`      | String               | ✅       | Trimmed, 2–80 chars |
-| `phone`     | String               | ✅       | **Unique**, 6–20 chars, digits/`+`/`-`/space |
+| `customerCode` | String            | ❌       | Master-sheet ID (`C001`…); **unique + sparse**; auto-generated on create when omitted (next free `C###`) |
+| `phone`     | String               | ❌       | **Unique + sparse** (many real customers have no phone), 6–20 chars, digits/`+`/`-`/space when present |
+| `businessName` | String            | ❌       | ≤ 120 chars (master sheet "Business Name") |
+| `alternativePhone` | String        | ❌       | ≤ 20 chars, same charset (master sheet "Alternative Phone") |
 | `email`     | String               | ❌       | Valid e-mail if present |
 | `address`   | String               | ❌       | ≤ 240 chars |
+| `area`      | String               | ❌       | ≤ 120 chars (master sheet "Area" sometimes carries full sentences) |
+| `businessType` | `'workshop' \| 'contractor' \| 'retail-shop' \| 'company' \| 'individual'` | ❌ | master sheet "Business Type" |
+| `customerCategory` | String        | ❌       | ≤ 40 chars (master sheet "Customer Category") |
+| `customerSince` | Date             | ❌       | Master sheet "Customer Since" |
+| `riskLevel` | `'low' \| 'medium' \| 'high' \| 'critical'` | ❌ | Due-summary "Risk Level" |
+| `recoveryStatus` | `'not-contacted' \| 'contacted' \| 'promise-made' \| 'partial-payment' \| 'completed' \| 'refused' \| 'disputed' \| 'legal-action'` | ❌ | Due-summary "Recovery Status" |
 | `notes`     | String               | ❌       | ≤ 500 chars |
 | `status`    | `'active' \| 'archived'` | ❌ (default `'active'`) | Archived customers hidden from lists, history kept |
+| `deletedAt` | Date                | ❌       | Soft-delete marker (§5.7): set = the customer is in the Trash |
+| `deletedBy` | ObjectId → `Admin`  | ❌       | Who soft-deleted it (audit) |
 | `createdAt` / `updatedAt` | timestamps | auto | |
 
-Indexes: `{ phone: 1 }` (unique), `{ name: 'text' }`.
+Indexes: `{ phone: 1 }` (unique, sparse), `{ customerCode: 1 }` (unique, sparse), `{ name: 'text' }`.
 
 ### 5.3 `Transaction`
 
 | Field         | Type                          | Required | Notes |
 | ------------- | ----------------------------- | -------- | ----- |
 | `customerId`  | ObjectId → `Customer`         | ✅       | Cascade-deleted with customer |
-| `type`        | `'lend' \| 'repayment'`       | ✅       | Enum |
+| `type`        | `'lend' \| 'repayment'`       | ✅       | Enum; master-sheet `Credit` → `lend`, `Payment` → `repayment` |
 | `amount`      | Decimal128                    | ✅       | `> 0`, ≤ 99,999,999 |
 | `date`        | Date                          | ✅       | Defaults to now; back-datable |
-| `method`      | `'cash' \| 'bank' \| 'mobile-banking' \| 'other'` | ❌ (default `'cash'`) | |
-| `note`        | String                        | ❌       | ≤ 240 chars |
-| `createdBy`   | ObjectId → `Admin`            | ✅       | Audit |
+| `method`      | `'cash' \| 'bank' \| 'mobile-banking' \| 'other'` | ❌ (default `'cash'`) | Master-sheet `bKash` → `mobile-banking` |
+| `note`        | String                        | ❌       | ≤ 240 chars (master-sheet "Description") |
+| `addedBy`     | String                        | ❌       | ≤ 60 chars - who recorded it, business-level (defaults to the session admin's name) |
+| `referenceCode` | String                      | ❌       | ≤ 20 chars - master-sheet `TRX###` reference; **not** unique (source sheet reuses IDs) |
+| `productCategory` | String                    | ❌       | ≤ 60 chars |
+| `verificationStatus` | String                | ❌       | ≤ 40 chars |
+| `referenceSource` | String                    | ❌       | ≤ 120 chars (physical book / video reference) |
+| `createdBy`   | ObjectId → `Admin`            | ✅       | Audit (always the logged-in admin) |
+| `deletedAt`   | Date                          | ❌       | Soft-delete marker (§5.7): set = the entry is in the Trash |
+| `deletedBy`   | ObjectId → `Admin`            | ❌       | Who soft-deleted it (audit) |
 | `createdAt` / `updatedAt` | timestamps | auto | |
 
 Indexes: `{ customerId: 1, date: -1 }`, `{ date: -1 }`, `{ type: 1 }`.
@@ -206,9 +241,12 @@ Indexes: `{ customerId: 1, date: -1 }`, `{ date: -1 }`, `{ type: 1 }`.
 | `name`        | String   | ✅       | |
 | `email`       | String   | ✅       | Unique, lowercase |
 | `passwordHash`| String   | ✅       | bcrypt (cost ≥ 10) - plain password never stored |
+| `role`        | `'admin' \| 'super-admin'` | ❌ (default `'admin'`) | RBAC (§1.4); session JWT carries it. Pre-v1.4 admins/tokens (the legacy owner) resolve to `'super-admin'` so the upgrade never strips the owner's purge access; admins created from v1.4 on always carry an explicit role |
 | `createdAt` / `updatedAt` | timestamps | auto | |
 
-Single seeded admin; no self-registration endpoint exists.
+No self-registration endpoint exists. The seed script upserts the env admin
+with `ADMIN_ROLE` (default `super-admin`) and can create further admins
+(`npm run seed -- --create-admin "Name" email password [--role admin]`).
 
 ### 5.5 Derived Aggregations
 
@@ -218,6 +256,76 @@ Single seeded admin; no self-registration endpoint exists.
 | Overview totals | Across all customers: `totalLent`, `totalCollected`, `totalOutstanding` |
 | Last activity | Max `date` per customer |
 | Running balance | Ordered by `date asc, createdAt asc` cumulative sum for the customer-detail table and PDF |
+
+All derived math covers **live documents only** - anything sitting in the
+Trash (`deletedAt` set, §5.7) is invisible to dues, overview totals, lists,
+exports, and the PDF, exactly as if it were already gone.
+
+### 5.5b Overview chart series (v1.4)
+
+| Series | Computation |
+| ------ | ----------- |
+| Flow in/out | `Σ lend` (out) and `Σ repayment` (in) bucketed by `granularity` - week (last 12 ISO weeks), month (last 12 calendar months, the default), or year (all years) |
+| Recovery mix | Active customers grouped by `recoveryStatus` (unset counted as "not set") |
+| Collection progress | `Σ collected ÷ Σ lent` as one filled bar with the Lent out / Repayment / Due amounts beside it (replaces the v1.4-draft rate line chart, works.md F17) |
+
+Chart data is served by its own endpoint (`GET /api/overview/charts?granularity=week|month|year`)
+so the overview page can render instantly and stream charts in afterwards
+(FR-4.5). The customer detail page computes the same series client-side from
+its ledger payload through the same pure calculators.
+
+### 5.6 Master-sheet import (docs/data, v1.3)
+
+The real ledger arrives as the "Mihad Traders" spreadsheet export (6 CSVs).
+Imported by `scripts/import-mihad-csv.ts` (`npm run import-csv`):
+
+- **Customers.csv + Due Summary.csv → Customer.** Join on customer ID. The
+  duplicated `C002` row (Saiful Islam) is really `C003` (Due Summary's key).
+  Empty `C095` rows are skipped. `N/A` / blank values become absent fields.
+  Risk Level + Recovery Status land on the customer from Due Summary.
+  "Current Status" (empty everywhere) is **not** modeled - `status`
+  active/archived keeps its existing meaning.
+- **Transactions.csv → Transaction.** Payment/Credit → repayment/lend;
+  Cash/bKash → cash/mobile-banking; `TRXOO2` typo fixed to `TRX002`; empty
+  rows skipped; duplicated TRX IDs are kept (reference codes are not unique).
+  Phones are quote-stripped (`'01711…'`, `"""017…"""` → digits).
+- **Opening balances.** The sheet carries *lifetime* credit/payment totals
+  while Transactions.csv only covers Jul-Sep 2026, so each customer also gets
+  synthetic opening rows dated 2026-01-01: one `lend` of
+  `max(totalCredit, Σ imported payments)` and one `repayment` of
+  `max(0, totalPayment − Σ imported payments)`. Derived dues therefore match
+  the real ledger math even where the sheet's own "Current Due" column was
+  inconsistent (it ignored payments on several rows).
+- **Record Reference / Recovery Tracking CSVs** are empty schemas - skipped;
+  they become real modules later (§15). **Settings.csv** only informs the
+  enums above.
+- The import is **additive and idempotent-guarded** (aborts if any `C0##`
+  code already exists) - it never wipes existing rows.
+- One-time index migration: the `phone_1` unique index becomes **sparse**
+  (multiple customers without phones are legal now).
+
+### 5.7 Soft delete - the Trash (v1.4)
+
+Safety net against mistaken deletes: removing data is two-stage.
+
+- **Soft delete (Admin and Super Admin):** `DELETE` sets `deletedAt`/`deletedBy`
+  instead of removing the document. The row leaves every live list, total, and
+  export immediately. Soft-deleting a customer also soft-deletes their live
+  transactions (one shared timestamp) so the whole ledger moves to the Trash
+  together.
+- **Trash view:** `GET …?trash=true` returns only soft-deleted rows. The
+  Customers and Transactions tables expose it as a "Show trash" toggle.
+- **Restore (Admin and Super Admin):** `POST /api/<entity>/[id]/restore`
+  clears `deletedAt`/`deletedBy`. Restoring a customer also restores exactly
+  the transactions that were cascade-deleted with it (matched by the shared
+  `deletedAt`).
+- **Purge (Super Admin only):** `DELETE …?purge=true` removes the document
+  permanently (customer purge cascades a hard delete of all its transactions).
+  Admins attempting it get `403`.
+- **Rules:** trashed rows cannot be edited or appended to (422 with a
+  "restore first" message); codes stay unique while their owner sits in the
+  Trash (auto-generated `C###` never reuses a trashed code); archived/trashed
+  are independent - Trash wins for visibility.
 
 ---
 
@@ -230,41 +338,46 @@ All handlers under `src/app/api`. All responses use one envelope:
 { "success": true, "data": ... }            { "success": false, "message": "Human-readable reason" }
 ```
 
-Auth: cookie session (JWT, httpOnly). Unauthenticated → `401`. Invalid input → `422` with message. Unknown server error → `500`.
+Auth: cookie session (JWT, httpOnly). Unauthenticated → `401`. Invalid input → `422` with message. Action not allowed for the session's role → `403`. Unknown server error → `500`.
 
 ### 6.1 Auth
 
 | Method | Path              | Description |
 | ------ | ----------------- | ----------- |
-| POST   | `/api/auth/login` | Body `{ email, password }` → sets httpOnly JWT cookie |
+| POST   | `/api/auth/login` | Body `{ email, password }` → sets httpOnly JWT cookie (carries the admin's `role`) |
 | POST   | `/api/auth/logout`| Clears session cookie |
-| GET    | `/api/auth/me`   | Current admin or `401` |
+| GET    | `/api/auth/me`   | Current admin (incl. `role`) or `401` |
 
 ### 6.2 Customers
 
 | Method | Path                   | Description |
 | ------ | ---------------------- | ----------- |
-| GET    | `/api/customers`       | List. Query: `search` (name/phone, partial, case-insensitive), `status`, `page` (default 1), `limit` (default 10). Each row includes derived `due` + `lastTransactionDate` |
-| POST   | `/api/customers`       | Create. Duplicate phone → `409` |
-| GET    | `/api/customers/[id]`  | Detail + summary (`totalLent`, `totalReceived`, `due`) + full transaction history with running balance |
-| PATCH  | `/api/customers/[id]`  | Partial update. Phone collision → `409` |
-| DELETE | `/api/customers/[id]`  | Delete customer **and cascade-delete their transactions**. Only via explicit confirm dialog |
+| GET    | `/api/customers`       | List. Query: `search` (name/phone/**alternativePhone**/customerCode/businessName/**area**, partial, case-insensitive), `riskLevel`, `recoveryStatus`, `status`, `trash` (`true` = only soft-deleted rows, §5.7), `page` (default 1), `limit` (default 10). Each row includes derived `due` + `lastTransactionDate` |
+| POST   | `/api/customers`       | Create. Duplicate phone or customerCode → `409`. `customerCode` auto-generated (next free `C###`, never reusing a trashed code) when omitted |
+| GET    | `/api/customers/[id]`  | Detail + summary (`totalLent`, `totalReceived`, `due`) + full live transaction history with running balance |
+| PATCH  | `/api/customers/[id]`  | Partial update. Phone collision → `409`. Trashed customer → `422` (restore first) |
+| DELETE | `/api/customers/[id]`  | Soft delete (§5.7): customer + their live transactions move to the Trash. Explicit confirm dialog client-side |
+| DELETE | `/api/customers/[id]?purge=true` | **Super Admin only** (else `403`): permanent delete + hard cascade of all their transactions |
+| POST   | `/api/customers/[id]/restore` | Restore from the Trash (customer + its cascade-deleted transactions) |
 
 ### 6.3 Transactions
 
 | Method | Path                       | Description |
 | ------ | -------------------------- | ----------- |
-| GET    | `/api/transactions`        | List. Query: `customerId`, `type`, `from`, `to` (date range), `page`, `limit`. Sorted `date desc` |
-| POST   | `/api/transactions`        | Create. `customerId` must exist (`422` otherwise) |
-| PATCH  | `/api/transactions/[id]`   | Partial update |
-| DELETE | `/api/transactions/[id]`   | Delete (with confirm) |
+| GET    | `/api/transactions`        | List. Query: `customerId`, `type`, `from`, `to` (date range), `trash` (`true` = only soft-deleted), `page`, `limit`. Sorted `date desc` |
+| POST   | `/api/transactions`        | Create. `customerId` must exist (`422` otherwise); a trashed customer is rejected with `422` |
+| PATCH  | `/api/transactions/[id]`   | Partial update. Trashed entry → `422` (restore first) |
+| DELETE | `/api/transactions/[id]`   | Soft delete (§5.7) - the entry moves to the Trash (with confirm) |
+| DELETE | `/api/transactions/[id]?purge=true` | **Super Admin only** (else `403`): permanent delete |
+| POST   | `/api/transactions/[id]/restore` | Restore from the Trash |
 
 ### 6.4 Aggregates
 
 | Method | Path             | Description |
 | ------ | ---------------- | ----------- |
-| GET    | `/api/dues`      | Per-customer due rows (`lent`, `received`, `due`, `lastTransactionDate`). Query: `search`, `onlyWithDue` (default true) |
-| GET    | `/api/overview`  | `{ totalCustomers, totalLent, totalCollected, totalOutstanding, recentTransactions[10], topDues[5] }` |
+| GET    | `/api/dues`      | Per-customer due rows (`lent`, `received`, `due`, `lastTransactionDate`). Query: `search` (code/name/business/phone/**area/alternativePhone**), `riskLevel`, `recoveryStatus`, `onlyWithDue` (default true). Live customers only |
+| GET    | `/api/overview`  | `{ totalCustomers, totalLent, totalCollected, totalOutstanding, recentTransactions[10], topDues[5] }` - live documents only |
+| GET    | `/api/overview/charts` | Chart series per §5.5b: query `granularity` = `week` \| `month` (default) \| `year`; returns `{ flow, recovery }` |
 
 > PDF needs **no endpoint** - it is generated client-side from `GET /api/customers/[id]` data (§10).
 
@@ -291,49 +404,63 @@ Auth: cookie session (JWT, httpOnly). Unauthenticated → `401`. Invalid input �
 
 ### FR-3 Dashboard Shell
 1. Sidebar (desktop): Overview, Customers, Transactions, Due Summaries - active-route highlighting.
-2. Mobile: hamburger → Sheet navigation.
-3. Header: page title, admin avatar dropdown (profile info, logout).
-4. All dashboard data/actions require an authenticated session (guard in `dashboard/layout.tsx` + middleware in v2).
+2. **Sidebar collapse (v1.4, works.md F22):** a footer toggle collapses the desktop sidebar to an icon-only rail (and back); the rail links carry `title`/`aria-label`, and the width + content padding animate together for one smooth motion. Mobile keeps the Sheet navigation.
+3. Mobile: hamburger → Sheet navigation.
+4. Header: page title, admin avatar dropdown (profile info + role, logout).
+5. All dashboard data/actions require an authenticated session (guard in `dashboard/layout.tsx` + middleware in v2).
 
 ### FR-4 Overview (`/dashboard`)
 1. Four stat cards: **Total Customers**, **Total Lent**, **Total Collected**, **Outstanding Due** (with currency formatting; outstanding uses red when > 0).
 2. **Recent Transactions** list (latest 10) - date, customer, type badge, amount, note.
 3. **Top Dues** list (5 highest outstanding) with link to each customer.
 4. Quick actions: "Add Customer", "Add Transaction".
+5. **Charts row (v1.4):** three charts per §5.5b - (a) money **in vs out** bars with a **week / month / year granularity toggle**, (b) **recovery-status mix** donut (tooltip always stacks above the center label), (c) **collection progress** filled bar comparing Lent out / Repayment / Due. Lazy-loaded: the page renders immediately with skeletons, chart data arrives from `/api/overview/charts` and the chart bundle code-splits behind `next/dynamic`. Palette per §9.2; fully responsive (stacks on mobile).
+6. The greeting addresses the signed-in admin by name ("Good evening, Mahfuz Zayn.").
 
 ### FR-5 Customer Management (`/dashboard/customers`)
-1. Table: name (with avatar initials), phone, total lent, total received, current due (badge: due / settled / advance), last activity, row actions (view / edit / delete).
-2. **Search** by name or phone (debounced); pagination (10/page).
-3. **Create / edit** in a Dialog: name, phone, email, address, notes - zod-validated inline.
-4. **Delete** via AlertDialog with explicit confirmation, stating that all transactions will be permanently removed.
+1. Table: customer code + name (with avatar initials), phone, total lent, total received, current due (badge: due / settled / advance), last activity, row actions (view / edit / delete).
+2. **Search** by code, name, business name, phone, alternative phone or area (debounced ~300 ms, server-side, query-driven - results update as you type with no UI jank); **filter selects** for risk level and recovery status; pagination (10/page).
+3. **Create / edit** in a Dialog: name, phone, alternative phone, business name, area, business type, risk level, recovery status, e-mail, address, customer since, notes - zod-validated inline. The customer code shows read-only (assigned on create).
+4. **Delete** via AlertDialog with explicit confirmation - moves the customer and their transactions to the **Trash** (restorable, §5.7). A "Show trash" toggle lists trashed rows with **Restore** and (Super Admin only) **Delete permanently**.
 5. Empty state with "Add your first customer" CTA.
+6. **Export** the full filtered scope as CSV or JSON (FR-9b).
 
 ### FR-6 Customer Detail (`/dashboard/customers/[id]`)
-1. Profile card (name, phone, email, address, notes, created date) + Edit / Delete actions.
+1. Profile card (code, name, business name, phones, e-mail, address, area, business type, risk/recovery, notes, created date) + Edit / Delete actions.
 2. Summary cards: Total Lent, Total Received, **Current Due** (badge).
-3. Full transaction history table - date, type badge, method, note, amount, **running balance** - sorted oldest → newest.
-4. **"Download History PDF"** button (FR-9).
+3. Full transaction history table - date, type badge, method, note, added by, amount, **running balance** - sorted oldest → newest.
+4. **Download history** as PDF (FR-9), or as CSV/JSON of the same customer payload (FR-9b).
 5. Quick "Add Transaction" for this customer (Dialog, pre-filled customer).
-6. Unknown id → friendly "Customer not found" state.
+6. **Insight charts (v1.4, works.md F17):** the customer's money in/out bars (with the week/month/year toggle), a payment-method mix donut, and the collection progress bar - computed client-side from the ledger payload through the shared calculators, lazy-loaded with skeletons.
+7. Unknown id → friendly "Customer not found" state.
+8. Fully responsive - the primary daily surface on phones.
 
 ### FR-7 Transaction Management (`/dashboard/transactions`)
-1. Table: date, customer (link), type badge (lend = red/out, repayment = green/in), method, note, amount, row actions (edit / delete).
-2. Filters: customer (Select), type (Select), date range (from/to). Reset button.
+1. Table: date, customer (code + name, link), type badge (lend = red/out, repayment = green/in), method (label-cased), note, added by, amount, row actions (edit / delete).
+2. Filters: customer (**searchable picker** - code/name/phone), type (Select), date range (from/to, both the shared **DatePicker**). Reset button.
 3. Pagination (15/page), sorted newest first.
-4. **Create / edit** Dialog: customer (searchable select), type, amount, date (default today), method, note - zod-validated.
-5. **Delete** with AlertDialog confirmation.
+4. **Create / edit** Dialog: customer (**searchable picker** - mouse, touch and keyboard: arrows + Enter), type, amount, date (default today, **shadcn Calendar** in a popover, never future), method (label-cased options), note, **added by** (text field with suggested names - the fixed staff list plus free entry, works.md F20) - zod-validated. Long dialogs scroll vertically inside the viewport - never overflow off-screen (works.md F18).
+5. **Delete** with AlertDialog confirmation - moves the entry to the **Trash**; a "Show trash" toggle lists trashed entries with **Restore** and (Super Admin only) **Delete permanently** (§5.7).
 6. Summary line for the current filter result: count + Σ lend + Σ repayment.
+7. **Export** the full filtered scope as CSV or JSON (FR-9b).
 
 ### FR-8 Due Summaries (`/dashboard/dues`)
-1. Table per customer: name, phone, lent, received, **outstanding** (badge), last activity, actions (view, PDF).
+1. Table per customer: code + name, phone, lent, received, **outstanding** (badge), last activity, actions (view, PDF).
 2. Sorted by outstanding desc. Totals footer row.
-3. Search + "show settled customers" toggle (default off).
+3. Search (code/name/business/phone/area, debounced server-side) + filter selects for risk level and recovery status + "show settled customers" toggle (default off).
 4. One-click "Download PDF" per row (same FR-9 document).
+5. **Export** the visible scope as CSV or JSON (FR-9b).
 
 ### FR-9 Customer History PDF (single file)
-1. One button → **one PDF** downloaded (filename `<customer-name>-history-<YYYY-MM-DD>.pdf`). Content per §10.
-2. Generates client-side (jsPDF + autotable) from the customer-detail payload.
+1. One button → **one PDF** downloaded (filename `<customer-name>-history-<YYYY-MM-DD>.pdf`). Content per §10 - Lendbook logo + teal brand palette, all §5.2/§5.3 columns.
+2. Generates client-side (React PDF Renderer) from the customer-detail payload.
 3. Loading state on the button + success toast; error toast on failure.
+
+### FR-9b Data Export (CSV / JSON, v1.3)
+1. Customers, Transactions and Due Summaries each offer **Export CSV** and **Export JSON** over the full filtered scope (all pages, not just the visible one); the customer detail page exports its own payload.
+2. CSV columns follow the master-sheet data model (§5.2/§5.3) - codes, business fields, risk/recovery, added-by - so the files round-trip back into the user's spreadsheet.
+3. One shared client-side exporter (`lib/export.ts`): UTF-8 BOM (৳ renders in Excel), RFC-4180 quoting, `formatCurrency`-consistent raw numbers (unformatted, spreadsheet-friendly).
+4. Generated client-side; no server endpoint.
 
 ### FR-10 Feedback & States (global)
 1. Every mutation (create/edit/delete/login/logout/PDF) → **Sonner** toast (success or error).
@@ -352,6 +479,12 @@ Auth: cookie session (JWT, httpOnly). Unauthenticated → `401`. Invalid input �
 3. **Shared motion language:** one set of variants/timings in `lib/motion.ts` (e.g. `fadeUp`, `stagger`) reused everywhere - not ad-hoc per page.
 4. All animation respects `prefers-reduced-motion` (reduced to simple fades or none).
 5. Animation is a polish layer: content and actions must be fully usable if it never runs.
+
+### FR-13 Shared DatePicker behavior (v1.4)
+1. The calendar popover offers **month and year dropdowns** (no endless month-paging) and a **manual date input** accepting `DD/MM/YYYY` (also `YYYY-MM-DD`), so a far-back date is a few keystrokes away. Used wherever a date is picked (transaction date, transaction filters, customer since).
+
+### FR-14 Not Found page (v1.4)
+1. A themed `app/not-found.tsx` catches every unmatched URL: oversized editorial "404", one line of product-real copy, a **Return home** button. Matches the landing design system (§9) and works at 360 px.
 
 ---
 
@@ -384,11 +517,12 @@ Auth: cookie session (JWT, httpOnly). Unauthenticated → `401`. Invalid input �
 
 ### 9.2 Foundations
 - **Font:** Inter (Next.js default) - system fallback.
-- **Palette:** cool neutral base + **teal-green primary** (`oklch(0.51 0.096 175)`); semantic only: red = due/lend-out, green = settled/repayment-in, blue = advance.
-- **Gradients:** primary buttons, active sidebar chips, marquee, CTA band, and the login brand panel use teal gradients; cards carry a whisper-fade teal tint (gradient system in `globals.css`).
+- **Palette (v1.4, works.md F21):** defined once in `globals.css` as the **brand trio** - `--brand-primary` `#15088f` (deep indigo), `--brand-secondary` `#f30608` (signal red), `--brand-accent` `#150590` - from which `--primary`, `--destructive`, and the tinted neutrals derive. Re-theming = editing those three (+ the tint hue), nothing else. Semantic only: red = due/lend-out, green = settled/repayment-in, blue = advance.
+- **Gradients:** every gradient (primary buttons, active sidebar chip, marquee, CTA band, login brand panel, testimonial avatars, logo block, hero/404 accents, the card whisper tint) references the shared `--grad-from/--grad-via/--grad-to` stops, which `color-mix` from the brand trio - so gradients always follow the palette.
 - **Radius:** `0` (sharp/editorial - radix-mira default).
 - **Currency:** single constant in `lib/config.ts` - symbol **`৳` (BDT)** by default, trivially changeable; thousands separators via one shared `formatCurrency()`.
 - **Dates:** one shared `formatDate()` (e.g. `19 Aug 2026`).
+- **Charts (v1.4):** categorical ramp `--chart-1…6` indigo-anchored and validated (CVD + contrast) with the semantic in/out pair (red `#f30608` = lend out, emerald `#059669` = repaid in); grids/axes/text are quiet neutrals; legends always carry text (NFR-4).
 
 ### 9.3 Component Mapping (shadcn)
 | Area | Components |
@@ -407,13 +541,18 @@ Auth: cookie session (JWT, httpOnly). Unauthenticated → `401`. Invalid input �
 
 **Filename:** `<customer-name>-history-<YYYY-MM-DD>.pdf`
 
-Layout (single cohesive document, A4 portrait):
+Layout (single cohesive document, A4 portrait), in the **Lendbook brand**: logo
+image (`/public/images/logo.png`) in the header, teal accent rules and summary
+values, semantic red/green/blue kept for due/repayment/advance:
 
-1. **Header** - App name + "Customer Lending History"; generated-on date.
-2. **Customer block** - name, phone, email/address (if present), customer-since date.
+1. **Header** - logo + app name + "Customer Lending History"; generated-on date.
+2. **Customer block** - code, name, business name, phones, e-mail, address/area
+   (if present), risk/recovery labels, customer-since date.
 3. **Summary row** - Total Lent · Total Received · **Current Outstanding** (bold, with "settled"/"advance" wording when applicable).
-4. **Ledger table** - columns: `#`, Date, Type, Method, Note, Amount (signed: lend `−`, repayment `+`), **Running Balance**. Oldest → newest. Totals row at the bottom.
-5. **Footer** - page numbers; "Generated by Lend Management System".
+4. **Ledger table** - columns: `#`, Date, Type, Method, Note, Added By (when
+   present), Amount (signed: lend `−`, repayment `+`), **Running Balance**.
+   Oldest → newest. Totals row at the bottom.
+5. **Footer** - page numbers; "Generated by Lendbook".
 
 Generated client-side with **React PDF Renderer** (`@react-pdf/renderer`): the document is a declarative React component (`components/pdf/CustomerHistoryDocument.tsx` - Document/Page/Text/View primitives), triggered via its hooks (e.g. `usePDF`) and downloaded as a single Blob from the customer-detail payload; no server endpoint.
 
@@ -427,7 +566,8 @@ Generated client-side with **React PDF Renderer** (`@react-pdf/renderer`): the d
 4. All mutating endpoints validate bodies with zod before touching the DB.
 5. Login rate-limit: ≤ 5 failed attempts / 10 min / IP (in-memory; document limits in README).
 6. Cascade deletes happen only through the confirmed endpoint path (no bulk endpoints exist).
-7. MongoDB connection string and secrets live only in env vars; `.env*` git-ignored except `.env.example`.
+7. **Role enforcement is server-side (v1.4):** purge endpoints verify the session's role is `super-admin` and return `403` otherwise - the UI hiding the button is courtesy, not the gate. Soft delete/restore are open to any admin.
+8. MongoDB connection string and secrets live only in env vars; `.env*` git-ignored except `.env.example`.
 
 ---
 
@@ -438,6 +578,7 @@ Generated client-side with **React PDF Renderer** (`@react-pdf/renderer`): the d
 | `MONGODB_URI` | server | Atlas connection string |
 | `JWT_SECRET` | server | ≥ 32 random chars |
 | `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | seed script | First admin; also the v1 demo credential |
+| `ADMIN_ROLE` | seed script | `admin` or `super-admin` (default) for the seeded admin (v1.4) |
 | `NEXT_PUBLIC_APP_NAME` | client | "Lend Management System" |
 
 `src/lib/config.ts` holds non-secret client constants: app name, currency symbol. `.env.example` committed and documented in README.
@@ -522,13 +663,13 @@ One line per completed task, newest at the bottom:
 
 ## 15. Out of Scope / Future Enhancements
 
-- Additional roles (staff, multi-tenant, read-only viewers)
+- Additional roles beyond Admin / Super Admin (staff, multi-tenant, read-only viewers)
 - Interest, EMI schedules, reminders (SMS/e-mail/WhatsApp)
 - Contact-form message storage or e-mail delivery
-- Charts/analytics beyond overview cards; CSV/Excel export
+- Charts/analytics beyond the overview charts; Excel (non-CSV) export
 - Dark mode, i18n, multi-currency
 - Receipt printing, customer-facing portal
-- Full audit log / soft-delete trash with restore
+- Full audit log (who changed what beyond the delete markers)
 
 ---
 

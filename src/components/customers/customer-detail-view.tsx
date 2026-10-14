@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
@@ -9,6 +10,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
   ArrowLeft01Icon,
+  ArrowTurnBackwardIcon,
   Delete01Icon,
   Download04Icon,
   Edit01Icon,
@@ -20,6 +22,7 @@ import { DeleteCustomerDialog } from "@/components/customers/delete-customer-dia
 import { TransactionFormDialog } from "@/components/transactions/transaction-form-dialog";
 import { downloadCustomerHistoryPdf } from "@/components/pdf/download-customer-history-pdf";
 import { DueBadge } from "@/components/shared/due-badge";
+import { ExportMenu } from "@/components/shared/export-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,10 +36,38 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { GranularityToggle } from "@/components/dashboard/charts/chart-bits";
+import { METHOD_FILL } from "@/components/dashboard/charts/fills";
 import { ApiClientError, api, errorMessage } from "@/lib/api-client";
+import { downloadExport, downloadJsonFile, type ExportColumn, type ExportFormat } from "@/lib/export";
+import { flowSeries, methodMix } from "@/lib/domain";
 import { staggerItem, staggerParent } from "@/lib/motion";
-import { cn, formatCurrency, formatDate, getInitials } from "@/lib/utils";
-import type { CustomerDetail } from "@/types";
+import {
+  businessTypeLabel,
+  cn,
+  formatCurrency,
+  formatDate,
+  getInitials,
+  methodLabel,
+  recoveryStatusLabel,
+  riskLabel,
+} from "@/lib/utils";
+import type { AdminRole, CustomerDetail, FlowGranularity, TransactionWithBalance } from "@/types";
+
+// Insight charts are code-split + client-only (FR-6.6) - the detail page's
+// own payload already holds everything they need.
+const FlowChart = dynamic(
+  () => import("@/components/dashboard/charts/flow-chart").then((m) => m.FlowChart),
+  { ssr: false }
+);
+const MixDonut = dynamic(
+  () => import("@/components/dashboard/charts/mix-donut").then((m) => m.MixDonut),
+  { ssr: false }
+);
+const CollectionBar = dynamic(
+  () => import("@/components/dashboard/charts/collection-bar").then((m) => m.CollectionBar),
+  { ssr: false }
+);
 
 type LoadState =
   | { phase: "loading" }
@@ -44,7 +75,13 @@ type LoadState =
   | { phase: "not-found" }
   | { phase: "ready"; data: CustomerDetail };
 
-export function CustomerDetailView({ customerId }: { customerId: string }) {
+export function CustomerDetailView({
+  customerId,
+  role,
+}: {
+  customerId: string;
+  role: AdminRole;
+}) {
   const router = useRouter();
   const [state, setState] = useState<LoadState>({ phase: "loading" });
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -53,6 +90,28 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addTxOpen, setAddTxOpen] = useState(false);
   const [pdfPending, setPdfPending] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [chartGranularity, setChartGranularity] = useState<FlowGranularity>("month");
+
+  // Chart inputs stay hook-safe for the early-return phases below.
+  const ledgerForCharts = useMemo(
+    () => (state.phase === "ready" ? state.data.transactions : []),
+    [state]
+  );
+  const flow = useMemo(
+    () => flowSeries(ledgerForCharts, chartGranularity),
+    [ledgerForCharts, chartGranularity]
+  );
+  const methodSlices = useMemo(
+    () =>
+      methodMix(ledgerForCharts).map((slice) => ({
+        key: slice.key,
+        label: methodLabel(slice.key),
+        count: slice.count,
+        secondary: slice.amount,
+      })),
+    [ledgerForCharts]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -126,7 +185,57 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
     );
   }
 
-  const { customer, summary, transactions: ledger } = state.data;
+  const detail = state.data;
+  const { customer, summary, transactions: ledger } = detail;
+  const trashed = Boolean(customer.deletedAt);
+
+  async function handleRestore() {
+    setRestoring(true);
+    try {
+      const { transactionsRestored } = await api.restoreCustomer(customer.id);
+      toast.success("Customer restored", {
+        description:
+          transactionsRestored > 0
+            ? `${customer.name} and ${transactionsRestored} transaction${
+                transactionsRestored > 1 ? "s" : ""
+              } are back in the ledger.`
+            : `${customer.name} is back in the ledger.`,
+      });
+      reload();
+    } catch (error) {
+      toast.error("Couldn't restore that customer.", { description: errorMessage(error) });
+    } finally {
+      setRestoring(false);
+    }
+  }
+
+  /** CSV = the ledger rows (spreadsheet-shaped); JSON = the full payload. */
+  const ledgerColumns: ExportColumn<TransactionWithBalance>[] = [
+    { header: "Customer Code", value: () => customer.customerCode ?? "" },
+    { header: "Customer Name", value: () => customer.name },
+    { header: "Reference", value: (t) => t.referenceCode ?? "" },
+    { header: "Date", value: (t) => t.date.slice(0, 10) },
+    { header: "Type", value: (t) => (t.type === "lend" ? "Credit" : "Payment") },
+    { header: "Method", value: (t) => methodLabel(t.method) },
+    { header: "Description", value: (t) => t.note ?? "" },
+    { header: "Added By", value: (t) => t.addedBy ?? "" },
+    {
+      header: "Amount",
+      value: (t) => (t.type === "lend" ? -t.amount : t.amount),
+    },
+    { header: "Balance", value: (t) => t.balance },
+  ];
+
+  function handleExport(format: ExportFormat): string {
+    const basename = `lendbook-${(customer.customerCode ?? customer.name)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")}-history`;
+    if (format === "json") {
+      return downloadJsonFile(basename, detail);
+    }
+    return downloadExport(format, basename, ledgerColumns, ledger);
+  }
 
   return (
     <motion.div
@@ -145,9 +254,31 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
         </Link>
       </div>
 
+      {trashed && (
+        <div className="flex flex-col items-start gap-2 border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-amber-900">
+            This customer is in the trash - restored ledger math excludes them
+            {role === "super-admin"
+              ? ". Permanent delete lives in the Customers trash view."
+              : ". A super admin can remove them permanently."}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={restoring}
+            onClick={() => {
+              void handleRestore();
+            }}
+          >
+            <HugeiconsIcon icon={ArrowTurnBackwardIcon} strokeWidth={2} data-icon="inline-start" />
+            {restoring ? "Restoring…" : "Restore"}
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_2fr] lg:items-start">
         {/* Profile */}
-        <motion.div variants={staggerItem} className="flex flex-col gap-4">
+        <motion.div variants={staggerItem} className="flex min-w-0 flex-col gap-4">
           <Card className="gap-4">
             <div className="flex items-start gap-3">
               <span className="flex size-12 shrink-0 items-center justify-center bg-muted text-sm font-semibold">
@@ -155,6 +286,11 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
+                  {customer.customerCode && (
+                    <Badge variant="outline" className="font-mono uppercase tracking-wider">
+                      {customer.customerCode}
+                    </Badge>
+                  )}
                   <h2 className="text-base font-semibold tracking-tight">{customer.name}</h2>
                   {customer.status === "archived" && (
                     <Badge variant="outline" className="font-mono uppercase">
@@ -162,7 +298,37 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
                     </Badge>
                   )}
                 </div>
-                <p className="mt-0.5 font-mono text-xs text-muted-foreground">{customer.phone}</p>
+                {customer.businessName && customer.businessName !== customer.name && (
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {customer.businessName}
+                  </p>
+                )}
+                <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                  {customer.phone ?? "no phone on file"}
+                  {customer.alternativePhone ? ` · ${customer.alternativePhone}` : ""}
+                </p>
+                {(customer.riskLevel || customer.recoveryStatus) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {customer.riskLevel && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "font-mono text-[0.625rem] uppercase tracking-wider",
+                          customer.riskLevel === "critical" && "border-red-200 text-red-700",
+                          customer.riskLevel === "high" && "border-orange-200 text-orange-700",
+                          customer.riskLevel === "medium" && "border-amber-200 text-amber-700"
+                        )}
+                      >
+                        risk · {riskLabel(customer.riskLevel)}
+                      </Badge>
+                    )}
+                    {customer.recoveryStatus && (
+                      <Badge variant="outline" className="font-mono text-[0.625rem] uppercase tracking-wider">
+                        {recoveryStatusLabel(customer.recoveryStatus)}
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -170,23 +336,31 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
               <dt className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                 E-mail
               </dt>
-              <dd className="truncate">{customer.email ?? "-"}</dd>
+              <dd className="wrap-break-word">{customer.email ?? "-"}</dd>
               <dt className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                 Address
               </dt>
-              <dd>{customer.address ?? "-"}</dd>
+              <dd className="wrap-break-word">{customer.address ?? "-"}</dd>
+              <dt className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
+                Area
+              </dt>
+              <dd className="wrap-break-word">{customer.area ?? "-"}</dd>
+              <dt className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
+                Business
+              </dt>
+              <dd>{customer.businessType ? businessTypeLabel(customer.businessType) : "-"}</dd>
               <dt className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                 Since
               </dt>
-              <dd>{formatDate(customer.createdAt)}</dd>
+              <dd>{formatDate(customer.customerSince ?? customer.createdAt)}</dd>
               <dt className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                 Notes
               </dt>
-              <dd className="text-muted-foreground">{customer.notes ?? "-"}</dd>
+              <dd className="wrap-break-word text-muted-foreground">{customer.notes ?? "-"}</dd>
             </dl>
 
             <div className="flex flex-wrap gap-2 border-t pt-4">
-              <Button onClick={() => setAddTxOpen(true)}>
+              <Button onClick={() => setAddTxOpen(true)} disabled={trashed}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
                 Add transaction
               </Button>
@@ -203,36 +377,42 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
                 <HugeiconsIcon icon={Download04Icon} strokeWidth={2} data-icon="inline-start" />
                 {pdfPending ? "Preparing…" : "Download PDF"}
               </Button>
-              <Button variant="outline" onClick={() => setEditOpen(true)}>
+              <ExportMenu onExport={handleExport} disabled={ledger.length === 0} />
+              <Button variant="outline" onClick={() => setEditOpen(true)} disabled={trashed}>
                 <HugeiconsIcon icon={Edit01Icon} strokeWidth={2} data-icon="inline-start" />
                 Edit
               </Button>
-              <Button variant="ghost" className="text-destructive" onClick={() => setDeleteOpen(true)}>
+              <Button
+                variant="ghost"
+                className="text-destructive"
+                onClick={() => setDeleteOpen(true)}
+                disabled={trashed}
+              >
                 <HugeiconsIcon icon={Delete01Icon} strokeWidth={2} data-icon="inline-start" />
                 Delete
               </Button>
             </div>
           </Card>
 
-          {/* Summary tiles */}
-          <div className="grid grid-cols-3 gap-4">
-            <Card size="sm" className="gap-1">
+          {/* Summary tiles - one per row on phones, three up from sm (F14). */}
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
+            <Card size="sm" className="min-w-0 gap-1">
               <p className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                 Lent
               </p>
-              <p className="font-mono text-sm font-semibold tabular-nums">
+              <p className="truncate font-mono text-xs font-semibold tabular-nums sm:text-sm">
                 {formatCurrency(summary.totalLent)}
               </p>
             </Card>
-            <Card size="sm" className="gap-1">
+            <Card size="sm" className="min-w-0 gap-1">
               <p className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                 Received
               </p>
-              <p className="font-mono text-sm font-semibold tabular-nums">
+              <p className="truncate font-mono text-xs font-semibold tabular-nums sm:text-sm">
                 {formatCurrency(summary.totalReceived)}
               </p>
             </Card>
-            <Card size="sm" className="gap-1.5">
+            <Card size="sm" className="min-w-0 gap-1.5">
               <p className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                 Due
               </p>
@@ -241,8 +421,9 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
           </div>
         </motion.div>
 
-        {/* Ledger */}
-        <motion.div variants={staggerItem}>
+        {/* Ledger - min-w-0 lets the card shrink so the table scrolls inside
+            its own overflow-x container instead of pushing the page wide (F14). */}
+        <motion.div variants={staggerItem} className="min-w-0">
           <Card className="gap-0 p-0">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <p className="text-xs font-semibold">Transaction history</p>
@@ -257,6 +438,7 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
                   <TableHead>Type</TableHead>
                   <TableHead className="hidden md:table-cell">Method</TableHead>
                   <TableHead className="hidden lg:table-cell">Note</TableHead>
+                  <TableHead className="hidden xl:table-cell">Added by</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
                 </TableRow>
@@ -264,14 +446,14 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
               <TableBody>
                 {ledger.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-xs text-muted-foreground">
+                    <TableCell colSpan={7} className="py-10 text-center text-xs text-muted-foreground">
                       No transactions yet - record the first lend or repayment.
                     </TableCell>
                   </TableRow>
                 ) : (
                   ledger.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="text-xs">{formatDate(row.date)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">{formatDate(row.date)}</TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -285,15 +467,18 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
                           {row.type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="hidden text-xs capitalize text-muted-foreground md:table-cell">
-                        {row.method === "mobile-banking" ? "mobile banking" : row.method}
+                      <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                        {methodLabel(row.method)}
                       </TableCell>
                       <TableCell className="hidden max-w-48 truncate text-xs text-muted-foreground lg:table-cell">
                         {row.note ?? "-"}
                       </TableCell>
+                      <TableCell className="hidden max-w-32 truncate text-xs text-muted-foreground xl:table-cell">
+                        {row.addedBy ?? "-"}
+                      </TableCell>
                       <TableCell
                         className={cn(
-                          "text-right font-mono text-xs tabular-nums",
+                          "whitespace-nowrap text-right font-mono text-xs tabular-nums",
                           row.type === "repayment" && "text-emerald-600"
                         )}
                       >
@@ -301,7 +486,7 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
                           signed: true,
                         })}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs font-medium tabular-nums">
+                      <TableCell className="whitespace-nowrap text-right font-mono text-xs font-medium tabular-nums">
                         {formatCurrency(row.balance)}
                       </TableCell>
                     </TableRow>
@@ -311,10 +496,10 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
               {ledger.length > 0 && (
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={4} className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
+                    <TableCell colSpan={5} className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                       totals
                     </TableCell>
-                    <TableCell className="text-right font-mono text-xs tabular-nums">
+                    <TableCell className="whitespace-nowrap text-right font-mono text-xs tabular-nums">
                       <span className="text-emerald-600">
                         +{formatCurrency(summary.totalReceived)}
                       </span>{" "}
@@ -331,6 +516,61 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
           </Card>
         </motion.div>
       </div>
+
+      {/* Insight charts (FR-6.6) - computed client-side from the ledger. */}
+      {ledger.length > 0 && (
+        <motion.div variants={staggerItem} className="flex min-w-0 flex-col gap-4">
+          <Card className="gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs font-semibold">Money out &amp; in</p>
+                <p className="text-[0.625rem] text-muted-foreground">
+                  {customer.name}&apos;s lends vs repayments per {chartGranularity}
+                </p>
+              </div>
+              <GranularityToggle value={chartGranularity} onChange={setChartGranularity} />
+            </div>
+            {flow.length > 0 ? (
+              <FlowChart data={flow} />
+            ) : (
+              <p className="py-10 text-center text-xs text-muted-foreground">
+                Nothing in this window yet.
+              </p>
+            )}
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="h-full gap-3">
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs font-semibold">Payment methods</p>
+                <p className="text-[0.625rem] text-muted-foreground">
+                  entries by how the money moved
+                </p>
+              </div>
+              {methodSlices.length > 0 ? (
+                <MixDonut
+                  data={methodSlices}
+                  fillFor={(key) => METHOD_FILL[key] ?? "var(--chart-4)"}
+                  formatSecondary={(slice) => `${formatCurrency(slice.secondary)} total`}
+                  centerWord="entries"
+                />
+              ) : (
+                <p className="py-10 text-center text-xs text-muted-foreground">No entries yet.</p>
+              )}
+            </Card>
+
+            <Card className="h-full gap-3">
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs font-semibold">Collection progress</p>
+                <p className="text-[0.625rem] text-muted-foreground">
+                  what {customer.name} has repaid of everything lent
+                </p>
+              </div>
+              <CollectionBar summary={summary} />
+            </Card>
+          </div>
+        </motion.div>
+      )}
 
       {/* Dialogs */}
       <CustomerFormDialog

@@ -2,7 +2,10 @@
  * Seed script (requirements §12): `npm run seed [-- --demo]`
  *
  * - Always upserts the first admin from ADMIN_NAME / ADMIN_EMAIL /
- *   ADMIN_PASSWORD env vars (bcrypt, cost 12 - requirements §11.1).
+ *   ADMIN_PASSWORD env vars (bcrypt, cost 12 - requirements §11.1), with
+ *   ADMIN_ROLE (default super-admin) as the RBAC role (§5.4, v1.4).
+ * - `--create-admin "Name" email password [--role admin|super-admin]`
+ *   creates (or updates) a further admin without touching any data.
  * - `--demo` additionally replaces customers + transactions with the
  *   v1 mock dataset (10 customers / 41 transactions), preserving the
  *   original dates so the ledger history stays realistic.
@@ -38,6 +41,11 @@ function loadEnvFile(): void {
   }
 }
 
+/** ADMIN_ROLE env → mongoose role; anything unknown falls back to super-admin. */
+function roleFromEnv(): "admin" | "super-admin" {
+  return process.env.ADMIN_ROLE?.trim() === "admin" ? "admin" : "super-admin";
+}
+
 async function seedAdmin(): Promise<mongoose.Types.ObjectId> {
   const name = process.env.ADMIN_NAME?.trim();
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
@@ -50,13 +58,46 @@ async function seedAdmin(): Promise<mongoose.Types.ObjectId> {
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
   const admin = await AdminModel.findOneAndUpdate(
     { email },
-    { name, email, passwordHash },
+    { name, email, passwordHash, role: roleFromEnv() },
     { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   );
   if (!admin) throw new Error("Failed to upsert the admin record.");
 
-  console.log(`Admin seeded: ${admin.email}`);
+  console.log(`Admin seeded: ${admin.email} (${admin.role})`);
   return admin._id;
+}
+
+/**
+ * `--create-admin "Name" email password [--role admin|super-admin]` -
+ * the safe way to add staff accounts (§1.4) without hand-editing the DB.
+ * Never touches customers, transactions, or the env admin.
+ */
+async function createAdminFromArgs(argv: string[]): Promise<void> {
+  const index = argv.indexOf("--create-admin");
+  const args = argv.slice(index + 1).filter((a) => !a.startsWith("--"));
+  const name = args[0]?.trim();
+  const email = args[1]?.trim().toLowerCase();
+  const password = args[2] ?? "";
+  const roleFlag = argv.find((a) => a.startsWith("--role="))?.split("=")[1];
+  const role = roleFlag === "admin" || roleFlag === "super-admin" ? roleFlag : "admin";
+
+  if (!name || !email || !password) {
+    throw new Error(
+      "Usage: npm run seed -- --create-admin \"Name\" email password [--role=admin|super-admin]"
+    );
+  }
+  if (password.length < 8) {
+    throw new Error("Password needs at least 8 characters.");
+  }
+
+  const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
+  const admin = await AdminModel.findOneAndUpdate(
+    { email },
+    { name, email, passwordHash, role },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+  );
+  if (!admin) throw new Error("Failed to create the admin record.");
+  console.log(`Admin ready: ${admin.email} (${admin.role})`);
 }
 
 async function seedDemoData(adminId: mongoose.Types.ObjectId): Promise<void> {
@@ -110,6 +151,15 @@ async function seedDemoData(adminId: mongoose.Types.ObjectId): Promise<void> {
 
 async function main(): Promise<void> {
   loadEnvFile();
+
+  // Admin-creation mode: only touches the Admin collection, then exits.
+  if (process.argv.includes("--create-admin")) {
+    await connectToDatabase();
+    await createAdminFromArgs(process.argv);
+    console.log("Done.");
+    return;
+  }
+
   await connectToDatabase();
   console.log("Connected to MongoDB.");
 

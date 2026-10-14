@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 
 import { OverviewView } from "@/components/dashboard/overview-view";
+import { sessionFromCookies } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Overview",
 };
 
-export default function OverviewPage() {
-  return <OverviewView />;
+/** Server wrapper: the greeting addresses the signed-in admin by name (F19). */
+export default async function OverviewPage() {
+  const session = await sessionFromCookies();
+  return <OverviewView adminName={session?.name ?? "Admin"} />;
 }

@@ -19,6 +19,8 @@ import type { TransactionWithCustomer } from "@/types";
 
 interface DeleteTransactionDialogProps {
   transaction: TransactionWithCustomer | null;
+  /** true = super-admin permanent delete from the Trash (§5.7); default = soft delete. */
+  purge?: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called after a successful deletion so the caller can refetch. */
   onDeleted?: () => void;
@@ -26,6 +28,7 @@ interface DeleteTransactionDialogProps {
 
 export function DeleteTransactionDialog({
   transaction,
+  purge = false,
   onOpenChange,
   onDeleted,
 }: DeleteTransactionDialogProps) {
@@ -36,11 +39,19 @@ export function DeleteTransactionDialog({
     if (!transaction) return;
     setPending(true);
     try {
-      await api.deleteTransaction(transaction.id);
-      onOpenChange(false);
-      toast.success("Transaction deleted", {
-        description: "Dues and balances have been recalculated.",
-      });
+      if (purge) {
+        await api.deleteTransaction(transaction.id, { purge: true });
+        onOpenChange(false);
+        toast.success("Entry permanently deleted", {
+          description: "It is gone for good - the ledger recalculated without it.",
+        });
+      } else {
+        await api.deleteTransaction(transaction.id);
+        onOpenChange(false);
+        toast.success("Entry moved to trash", {
+          description: "Dues and balances recalculated; restore it from the trash anytime.",
+        });
+      }
       onDeleted?.();
     } catch (error) {
       toast.error("Entry was not deleted.", {
@@ -56,14 +67,20 @@ export function DeleteTransactionDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            Delete this {transaction ? (transaction.type === "lend" ? "lend" : "repayment") : "entry"}?
+            {purge
+              ? "Permanently delete this entry?"
+              : `Move this ${
+                  transaction ? (transaction.type === "lend" ? "lend" : "repayment") : "entry"
+                } to trash?`}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {transaction && (
               <>
                 {formatCurrency(transaction.amount)} · {transaction.customerName} ·{" "}
-                {formatDate(transaction.date)}. The ledger recalculates immediately -
-                this cannot be undone.
+                {formatDate(transaction.date)}.{" "}
+                {purge
+                  ? "It is gone for good once confirmed."
+                  : "The ledger recalculates immediately; any admin can restore it from the trash."}
               </>
             )}
           </AlertDialogDescription>
@@ -78,7 +95,7 @@ export function DeleteTransactionDialog({
             disabled={pending}
             className="bg-destructive text-white hover:bg-destructive/90"
           >
-            {pending ? "Deleting…" : "Delete entry"}
+            {pending ? "Deleting…" : purge ? "Delete permanently" : "Move to trash"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

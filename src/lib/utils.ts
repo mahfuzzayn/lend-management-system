@@ -57,3 +57,33 @@ export function getInitials(name: string) {
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("")
 }
+
+/** First letter capitalized, rest lowercase, hyphens/underscores → spaces. */
+function labelize(value: string) {
+  return value.replace(/[-_]+/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+}
+
+/** Display labels for the stored enums - same wording everywhere (UI, PDF, exports). */
+export function methodLabel(method: string) {
+  return labelize(method)
+}
+
+export function businessTypeLabel(type: string) {
+  return labelize(type).replace("Retail Shop", "Retail shop")
+}
+
+export function riskLabel(level: string) {
+  return labelize(level)
+}
+
+export function recoveryStatusLabel(status: string) {
+  return labelize(status)
+}
+
+/**
+ * Shared size + hover recipe for table row action buttons (works.md F12):
+ * big enough to hit, with a visible ring on hover. Destructive callers
+ * append " hover:text-destructive hover:ring-destructive/30".
+ */
+export const rowActionClass =
+  "size-7 rounded-sm hover:bg-muted hover:ring-1 hover:ring-ring/20 active:translate-y-0"

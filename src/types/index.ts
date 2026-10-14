@@ -10,17 +10,51 @@ export type PaymentMethod = "cash" | "bank" | "mobile-banking" | "other";
 
 export type CustomerStatus = "active" | "archived";
 
+/** Admin roles (requirements §1.4) - carried in the session JWT. */
+export type AdminRole = "admin" | "super-admin";
+
+export type BusinessType =
+  | "workshop"
+  | "contractor"
+  | "retail-shop"
+  | "company"
+  | "individual";
+
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+
+export type RecoveryStatus =
+  | "not-contacted"
+  | "contacted"
+  | "promise-made"
+  | "partial-payment"
+  | "completed"
+  | "refused"
+  | "disputed"
+  | "legal-action";
+
 /** Derived from the signed due value - never stored. */
 export type DueStatus = "due" | "settled" | "advance";
 
 export interface Customer {
   id: string;
   name: string;
-  phone: string;
+  /** Master-sheet ID (C001…) - assigned on create when omitted. */
+  customerCode?: string;
+  phone?: string;
+  businessName?: string;
+  alternativePhone?: string;
   email?: string;
   address?: string;
+  area?: string;
+  businessType?: BusinessType;
+  customerCategory?: string;
+  customerSince?: string; // ISO date
+  riskLevel?: RiskLevel;
+  recoveryStatus?: RecoveryStatus;
   notes?: string;
   status: CustomerStatus;
+  /** Set = the customer sits in the Trash (§5.7). */
+  deletedAt?: string; // ISO
   createdAt: string; // ISO
   updatedAt: string; // ISO
 }
@@ -33,6 +67,15 @@ export interface Transaction {
   date: string; // ISO - the transaction date (may be back-dated)
   method: PaymentMethod;
   note?: string;
+  /** Who recorded it, business-level (master-sheet "Added By"). */
+  addedBy?: string;
+  /** Master-sheet TRX### reference (not unique - the sheet reuses IDs). */
+  referenceCode?: string;
+  productCategory?: string;
+  verificationStatus?: string;
+  referenceSource?: string;
+  /** Set = the entry sits in the Trash (§5.7). */
+  deletedAt?: string; // ISO
   createdAt: string; // ISO
 }
 
@@ -52,9 +95,10 @@ export interface TransactionWithBalance extends Transaction {
   balance: number;
 }
 
-/** Transaction as shown in global lists (customer name joined). */
+/** Transaction as shown in global lists (customer name/code joined). */
 export interface TransactionWithCustomer extends Transaction {
   customerName: string;
+  customerCode?: string;
 }
 
 export interface CustomerSummary {
@@ -80,6 +124,44 @@ export interface OverviewStats {
   topDues: CustomerWithDue[];
 }
 
+/** Chart granularity for the in/out flow series (§5.5b). */
+export type FlowGranularity = "week" | "month" | "year";
+
+/** One bucket of money out vs in (§5.5b, chart data). */
+export interface FlowPoint {
+  /** Bucket key - "YYYY-MM-DD" (week start), "YYYY-MM", or "YYYY". */
+  key: string;
+  /** Human label ("8 Sep", "Aug 26", "2026"). */
+  label: string;
+  lend: number;
+  repayment: number;
+}
+
+/** Recovery-status slice of the active-customer mix (§5.5b). */
+export interface RecoveryMixSlice {
+  /** Recovery status key, "not-set", or "other". */
+  key: string;
+  label: string;
+  count: number;
+  /** Net Σ due over the slice (can be negative on advances). */
+  outstanding: number;
+}
+
+/** Payment-method slice of a ledger (per-customer insight donut). */
+export interface MethodMixSlice {
+  key: string;
+  label: string;
+  count: number;
+  /** Σ amount through this method. */
+  amount: number;
+}
+
+/** Payload of GET /api/overview/charts (FR-4.5). */
+export interface OverviewCharts {
+  flow: FlowPoint[];
+  recovery: RecoveryMixSlice[];
+}
+
 export interface Paginated<T> {
   items: T[];
   page: number;
@@ -103,4 +185,5 @@ export interface Admin {
   id: string;
   name: string;
   email: string;
+  role: AdminRole;
 }

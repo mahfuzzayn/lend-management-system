@@ -9,6 +9,7 @@ import { Container } from "@/components/shared/container";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useSignedIn } from "@/hooks/use-signed-in";
 import { DURATION, EASE_OUT, fadeUpLg, staggerItem, staggerParent } from "@/lib/motion";
 import { cn, formatCurrency, formatDate, getInitials } from "@/lib/utils";
 
@@ -20,6 +21,8 @@ const LEDGER_ROWS = [
 ] as const;
 
 export function Hero() {
+  const signedIn = useSignedIn();
+
   return (
     <section className="border-b">
       <Container className="grid items-center gap-14 py-16 sm:py-24 lg:grid-cols-[1.1fr_0.9fr]">
@@ -54,8 +57,8 @@ export function Hero() {
 
           <motion.div variants={staggerItem} className="flex flex-wrap items-center gap-3">
             <Button asChild size="lg">
-              <Link href="/login">
-                Sign in to dashboard
+              <Link href={signedIn ? "/dashboard/overview" : "/login"}>
+                {signedIn ? "Open dashboard" : "Sign in to dashboard"}
                 <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} data-icon="inline-end" />
               </Link>
             </Button>

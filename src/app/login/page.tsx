@@ -33,7 +33,7 @@ export default async function LoginPage() {
   return (
     <div className="grid flex-1 lg:grid-cols-2">
       {/* Brand panel */}
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-linear-to-br from-[oklch(0.55_0.095_173)] via-[oklch(0.46_0.086_178)] to-[oklch(0.375_0.072_185)] p-10 text-primary-foreground lg:flex">
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-linear-to-br from-(--grad-from) via-(--grad-via) to-(--grad-to) p-10 text-primary-foreground lg:flex">
         <Wordmark inverted />
 
         <div className="flex flex-col gap-5">

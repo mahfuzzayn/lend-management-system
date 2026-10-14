@@ -13,7 +13,18 @@ export interface TransactionFields {
   date: Date;
   method: "cash" | "bank" | "mobile-banking" | "other";
   note?: string;
+  /** Business-level "who recorded it" (master-sheet Added By); defaults to the admin's name. */
+  addedBy?: string;
+  /** Master-sheet TRX### reference - deliberately NOT unique (the sheet reuses IDs). */
+  referenceCode?: string;
+  productCategory?: string;
+  verificationStatus?: string;
+  referenceSource?: string;
   createdBy: mongoose.Types.ObjectId;
+  /** Soft-delete marker (§5.7): set = the entry is in the Trash. */
+  deletedAt?: Date;
+  /** Who soft-deleted the entry (audit). */
+  deletedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,10 +71,50 @@ const transactionSchema = new Schema<TransactionFields>(
       maxlength: [240, "Keep the note under 240 characters."],
       default: undefined,
     },
+    addedBy: {
+      type: String,
+      trim: true,
+      maxlength: [60, "Keep the added-by name under 60 characters."],
+      default: undefined,
+    },
+    referenceCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      maxlength: [20, "Keep the reference code under 20 characters."],
+      default: undefined,
+    },
+    productCategory: {
+      type: String,
+      trim: true,
+      maxlength: [60, "Keep the product category under 60 characters."],
+      default: undefined,
+    },
+    verificationStatus: {
+      type: String,
+      trim: true,
+      maxlength: [40, "Keep the verification status under 40 characters."],
+      default: undefined,
+    },
+    referenceSource: {
+      type: String,
+      trim: true,
+      maxlength: [120, "Keep the reference source under 120 characters."],
+      default: undefined,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "Admin",
       required: [true, "Created-by is required."],
+    },
+    deletedAt: {
+      type: Date,
+      default: undefined,
+    },
+    deletedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+      default: undefined,
     },
   },
   { timestamps: true }

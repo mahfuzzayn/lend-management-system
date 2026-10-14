@@ -20,6 +20,8 @@ interface DeleteCustomerDialogProps {
   customer: Customer | null;
   /** Transaction count to state in the warning (derived by the caller, when known). */
   transactionCount?: number;
+  /** true = super-admin permanent delete from the Trash (§5.7); default = soft delete. */
+  purge?: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called after a successful deletion (e.g. navigate back to the list). */
   onDeleted?: (id: string) => void;
@@ -28,6 +30,7 @@ interface DeleteCustomerDialogProps {
 export function DeleteCustomerDialog({
   customer,
   transactionCount,
+  purge = false,
   onOpenChange,
   onDeleted,
 }: DeleteCustomerDialogProps) {
@@ -38,14 +41,29 @@ export function DeleteCustomerDialog({
     if (!customer) return;
     setPending(true);
     try {
-      const { transactionsDeleted: transactionsRemoved } = await api.deleteCustomer(customer.id);
-      onOpenChange(false);
-      toast.success("Customer deleted", {
-        description:
-          transactionsRemoved > 0
-            ? `${customer.name} and ${transactionsRemoved} transaction${transactionsRemoved > 1 ? "s" : ""} removed permanently.`
-            : `${customer.name} removed permanently.`,
-      });
+      if (purge) {
+        const { transactionsDeleted = 0 } = await api.deleteCustomer(customer.id, { purge: true });
+        onOpenChange(false);
+        toast.success("Customer permanently deleted", {
+          description:
+            transactionsDeleted > 0
+              ? `${customer.name} and ${transactionsDeleted} transaction${
+                  transactionsDeleted > 1 ? "s" : ""
+                } removed for good.`
+              : `${customer.name} removed for good.`,
+        });
+      } else {
+        const { transactionsTrashed } = await api.deleteCustomer(customer.id);
+        onOpenChange(false);
+        toast.success("Customer moved to trash", {
+          description:
+            transactionsTrashed && transactionsTrashed > 0
+              ? `${customer.name} and ${transactionsTrashed} transaction${
+                  transactionsTrashed > 1 ? "s" : ""
+                } wait in the trash - restore anytime.`
+              : `${customer.name} waits in the trash - restore anytime.`,
+        });
+      }
       onDeleted?.(customer.id);
     } catch (error) {
       toast.error("Customer was not deleted.", {
@@ -60,13 +78,28 @@ export function DeleteCustomerDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {customer?.name}?</AlertDialogTitle>
+          <AlertDialogTitle>
+            {purge ? `Permanently delete ${customer?.name}?` : `Move ${customer?.name} to trash?`}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently removes the customer
-            {transactionCount
-              ? ` and their ${transactionCount} transaction${transactionCount > 1 ? "s" : ""}`
-              : " and their transaction history"}
-            . Dues and history cannot be recovered afterwards.
+            {purge ? (
+              <>
+                This removes the customer
+                {transactionCount
+                  ? ` and their ${transactionCount} transaction${transactionCount > 1 ? "s" : ""}`
+                  : " and their transaction history"}{" "}
+                for good - nothing can bring them back.
+              </>
+            ) : (
+              <>
+                They leave every list and total now
+                {transactionCount
+                  ? `, together with their ${transactionCount} transaction${transactionCount > 1 ? "s" : ""}`
+                  : ", together with their transaction history"}
+                , and wait in the trash where any admin can restore them. Only a
+                super admin can delete permanently.
+              </>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -79,7 +112,7 @@ export function DeleteCustomerDialog({
             disabled={pending}
             className="bg-destructive text-white hover:bg-destructive/90"
           >
-            {pending ? "Deleting…" : "Delete permanently"}
+            {pending ? "Deleting…" : purge ? "Delete permanently" : "Move to trash"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

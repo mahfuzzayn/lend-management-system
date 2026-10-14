@@ -49,6 +49,7 @@ Sign in at `/login` with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you seeded.
 | `MONGODB_URI` | server | Atlas connection string (include the database name) |
 | `JWT_SECRET` | server | ≥ 32 random chars - `openssl rand -base64 48` |
 | `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | seed | consumed by `npm run seed` |
+| `ADMIN_ROLE` | seed | `super-admin` (default) or `admin` for the seeded admin (RBAC) |
 | `NEXT_PUBLIC_APP_NAME` | client | display name ("Lendbook") |
 
 `.env` is git-ignored; `.env.example` documents every variable.
@@ -61,6 +62,8 @@ Sign in at `/login` with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you seeded.
 | `npm run build` / `npm start` | production build / serve |
 | `npm run lint` | ESLint (0 errors / 0 warnings expected) |
 | `npm run seed` | upsert the admin; `--demo` also (re)loads the sample ledger |
+| `npm run seed -- --create-admin "Name" email password [--role=admin\|super-admin]` | add (or update) another admin without touching any data |
+| `npm run import-csv` | import the real master-sheet CSVs from `docs/data` (customers, dues, transactions); `--dry-run` prints the plan without writing. **Additive** - aborts if the customer codes already exist, never wipes data |
 
 ### Security notes
 
@@ -72,6 +75,12 @@ Sign in at `/login` with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you seeded.
 - All mutating endpoints validate with the shared zod schemas before touching
   the database; Mongoose models add a second validation layer.
 - Passwords are bcrypt-hashed (cost 12) and never returned by the API.
+- **RBAC (roles):** every admin signs in the same way; the role rides in the
+  session JWT. Admins can soft-delete (Trash) and restore; only super admins
+  can purge (`?purge=true` endpoints enforce it server-side with 403).
+  Deleting is always two-stage - nothing leaves the Trash by accident.
+  Admins created before roles existed (the original owner) resolve to
+  super-admin automatically.
 
 ## Deploying (Vercel + Atlas)
 
@@ -96,6 +105,6 @@ src/
 ├── models/         Mongoose: Admin, Customer, Transaction
 ├── schemas/        shared zod schemas (client + server)
 └── proxy.ts        auth guard for /dashboard/* and /api/*
-scripts/            seed.ts (+ demo-data.ts for --demo)
-docs/               requirements.md, goals.md, progress.md, works.md
+scripts/            seed.ts (+ demo-data.ts for --demo), import-mihad-csv.ts
+docs/               requirements.md, goals.md, progress.md, works.md (+ data/ CSVs)
 ```

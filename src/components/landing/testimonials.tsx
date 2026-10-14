@@ -54,7 +54,7 @@ export function Testimonials() {
                   &ldquo;{testimonial.quote}&rdquo;
                 </p>
                 <div className="flex items-center gap-3 border-t pt-4">
-                  <span className="flex size-8 shrink-0 items-center justify-center bg-linear-to-br from-[oklch(0.585_0.095_172)] to-[oklch(0.415_0.078_182)] text-[0.625rem] font-semibold text-primary-foreground">
+                  <span className="flex size-8 shrink-0 items-center justify-center bg-linear-to-br from-(--grad-from) to-(--grad-to) text-[0.625rem] font-semibold text-primary-foreground">
                     {getInitials(testimonial.name)}
                   </span>
                   <div>

@@ -14,7 +14,13 @@ export async function GET(request: NextRequest) {
     if (!admin) throw new ApiError(401, "This session is no longer valid.");
 
     return apiSuccess({
-      admin: { id: String(admin._id), name: admin.name, email: admin.email },
+      admin: {
+        id: String(admin._id),
+        name: admin.name,
+        email: admin.email,
+        // Pre-role admin docs (created before v1.4) are the owner: super-admin.
+        role: admin.role ?? "super-admin",
+      },
     });
   });
 }

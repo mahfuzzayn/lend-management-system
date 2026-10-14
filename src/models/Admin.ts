@@ -1,9 +1,10 @@
 import mongoose, { Schema, type HydratedDocument, type Model } from "mongoose";
 
 /**
- * Admin model (requirements §5.4). Single seeded administrator -
- * no self-registration endpoint exists. The plain password is never
- * stored, only its bcrypt hash.
+ * Admin model (requirements §5.4). Seeded administrators only - no
+ * self-registration endpoint exists. The plain password is never stored,
+ * only its bcrypt hash. `role` drives RBAC (§1.4): admins soft-delete into
+ * the Trash; only super admins purge it.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -12,6 +13,7 @@ export interface AdminFields {
   name: string;
   email: string;
   passwordHash: string;
+  role: "admin" | "super-admin";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +36,14 @@ const adminSchema = new Schema<AdminFields>(
     passwordHash: {
       type: String,
       required: [true, "Password hash is required."],
+    },
+    role: {
+      type: String,
+      enum: {
+        values: ["admin", "super-admin"],
+        message: "Role must be admin or super-admin.",
+      },
+      default: "admin",
     },
   },
   { timestamps: true }

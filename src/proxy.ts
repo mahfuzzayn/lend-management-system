@@ -48,7 +48,12 @@ export function proxy(request: NextRequest): NextResponse {
   if (token && remaining !== null && remaining < SESSION_TTL_SECONDS / 2) {
     response.cookies.set(
       SESSION_COOKIE,
-      signSession({ sub: session.sub, email: session.email, name: session.name }),
+      signSession({
+        sub: session.sub,
+        email: session.email,
+        name: session.name,
+        role: session.role,
+      }),
       sessionCookieOptions()
     );
   }

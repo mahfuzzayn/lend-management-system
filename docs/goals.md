@@ -1,5 +1,10 @@
 # Goals - Step-by-Step Execution Plan (Zero → End)
 
+> ✅ **COMPLETE — 2026-10-13.** All 74 goals across 17 phases done and verified;
+> v2 deployed at https://lendbook.morlabs.co. Future work starts new goal lists
+> (features/fixes) per the workflow in requirements §13 - never append v3 scope
+> to this file's phases.
+
 Generated from `docs/requirements.md` v1.1 (§13.3). This is the build checklist.
 
 **Working rules**
@@ -135,6 +140,6 @@ Generated from `docs/requirements.md` v1.1 (§13.3). This is the build checklist
 
 ## Phase 17 - Deploy
 
-- [ ] G-72 MongoDB Atlas database + user; connection string into Vercel env vars
-- [ ] G-73 Deploy to Vercel (production), seed prod admin, set all env vars
-- [ ] G-74 Production smoke test vs §14.2 → mark v2 complete → **ask user to push final state to GitHub**
+- [x] G-72 MongoDB Atlas database + user; connection string into Vercel env vars
+- [x] G-73 Deploy to Vercel (production), seed prod admin, set all env vars
+- [x] G-74 Production smoke test vs §14.2 → mark v2 complete → **ask user to push final state to GitHub**

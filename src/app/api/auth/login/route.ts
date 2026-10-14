@@ -35,11 +35,23 @@ export async function POST(request: NextRequest) {
     }
     resetLoginFailures(ip);
 
-    const token = signSession({ sub: String(admin._id), email: admin.email, name: admin.name });
+    // Pre-role admin docs (created before v1.4) are the owner: super-admin.
+    const role = admin.role ?? "super-admin";
+    const token = signSession({
+      sub: String(admin._id),
+      email: admin.email,
+      name: admin.name,
+      role,
+    });
     (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions());
 
     return apiSuccess({
-      admin: { id: String(admin._id), name: admin.name, email: admin.email },
+      admin: {
+        id: String(admin._id),
+        name: admin.name,
+        email: admin.email,
+        role,
+      },
     });
   });
 }

@@ -74,6 +74,10 @@ export async function withApi(handler: () => Promise<NextResponse>): Promise<Nex
       return apiFailure(422, "One of the values has the wrong format.");
     }
     if ((error as { code?: number }).code === 11000) {
+      const key = (error as { keyPattern?: Record<string, number> }).keyPattern;
+      if (key?.customerCode) {
+        return apiFailure(409, "That customer code already exists.");
+      }
       return apiFailure(409, "That phone number already belongs to another customer.");
     }
     console.error("[api] unexpected error:", error);

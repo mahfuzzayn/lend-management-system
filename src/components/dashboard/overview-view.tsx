@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   animate,
   motion,
@@ -10,7 +11,7 @@ import {
   useTransform,
 } from "motion/react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon, ArrowRight01Icon, UserAdd01Icon } from "@hugeicons/core-free-icons";;
+import { Add01Icon, ArrowRight01Icon, UserAdd01Icon } from "@hugeicons/core-free-icons";
 
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog";
 import { TransactionFormDialog } from "@/components/transactions/transaction-form-dialog";
@@ -18,10 +19,28 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RECOVERY_FILL } from "@/components/dashboard/charts/fills";
+import { GranularityToggle } from "@/components/dashboard/charts/chart-bits";
 import { api, errorMessage } from "@/lib/api-client";
+import { dueStatusOf } from "@/lib/domain";
 import { EASE_OUT, staggerItem, staggerParent } from "@/lib/motion";
-import { cn, formatCurrency, formatDate, getInitials } from "@/lib/utils";
-import type { OverviewStats } from "@/types";
+import { cn, formatCurrency, formatDate, getInitials, methodLabel } from "@/lib/utils";
+import type { FlowGranularity, OverviewCharts, OverviewStats } from "@/types";
+
+// Charts are code-split and client-only (FR-4.5): the page paints instantly,
+// the recharts bundle streams in behind the skeletons.
+const FlowChart = dynamic(
+  () => import("@/components/dashboard/charts/flow-chart").then((m) => m.FlowChart),
+  { ssr: false }
+);
+const MixDonut = dynamic(
+  () => import("@/components/dashboard/charts/mix-donut").then((m) => m.MixDonut),
+  { ssr: false }
+);
+const CollectionBar = dynamic(
+  () => import("@/components/dashboard/charts/collection-bar").then((m) => m.CollectionBar),
+  { ssr: false }
+);
 
 /** Animated number that counts up to `value` (respects reduced motion). */
 function CountUp({ value, format }: { value: number; format: (n: number) => string }) {
@@ -48,11 +67,15 @@ function greetingFor(hour: number) {
   return "Good evening";
 }
 
-export function OverviewView() {
+export function OverviewView({ adminName = "Admin" }: { adminName?: string }) {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+
+  const [charts, setCharts] = useState<OverviewCharts | null>(null);
+  const [chartsError, setChartsError] = useState<string | null>(null);
+  const [granularity, setGranularity] = useState<FlowGranularity>("month");
 
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
@@ -78,6 +101,25 @@ export function OverviewView() {
       cancelled = true;
     };
   }, [reloadNonce]);
+
+  // Chart data loads separately (FR-4.5): the page is usable before it lands.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .overviewCharts(granularity)
+      .then((result) => {
+        if (cancelled) return;
+        setCharts(result);
+        setChartsError(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setChartsError(errorMessage(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadNonce, granularity]);
 
   const reload = () => setReloadNonce((n) => n + 1);
 
@@ -131,7 +173,7 @@ export function OverviewView() {
             {formatDate(now)} · overview
           </p>
           <h2 className="mt-1 text-xl font-semibold tracking-tight">
-            {greeting}, Admin.
+            {greeting}, {adminName}.
           </h2>
         </div>
         <div className="flex gap-2">
@@ -172,7 +214,7 @@ export function OverviewView() {
                   <p className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                     {card.label}
                   </p>
-                  <p className={cn("font-mono text-xl font-semibold tabular-nums tracking-tight", card.accent)}>
+                  <p className={cn("font-mono text-base font-semibold tabular-nums tracking-tight sm:text-xl", card.accent)}>
                     <CountUp value={card.value} format={card.format} />
                   </p>
                   <p className="text-[0.625rem] text-muted-foreground">{card.sub}</p>
@@ -180,6 +222,110 @@ export function OverviewView() {
               </motion.div>
             ))}
       </div>
+
+      {/* Charts row (FR-4.5) - lazy: skeletons until the chart payload lands. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <motion.div variants={staggerItem} className="min-w-0 lg:col-span-2">
+          <Card className="gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs font-semibold">Money out &amp; in</p>
+                <p className="text-[0.625rem] text-muted-foreground">
+                  lends vs repayments per {granularity}
+                </p>
+              </div>
+              {/* Granularity toggle (works.md F17). */}
+              <GranularityToggle value={granularity} onChange={setGranularity} />
+            </div>
+            {charts === null && !chartsError ? (
+              <div className="flex flex-col gap-3">
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-56 w-full sm:h-64" />
+              </div>
+            ) : charts && charts.flow.length > 0 ? (
+              <FlowChart data={charts.flow} />
+            ) : (
+              <p className="py-16 text-center text-xs text-muted-foreground">
+                No transactions yet - the first entry starts the rhythm.
+              </p>
+            )}
+          </Card>
+        </motion.div>
+
+        <motion.div variants={staggerItem} className="min-w-0">
+          <Card className="h-full gap-3">
+            <div className="flex flex-col gap-0.5">
+              <p className="text-xs font-semibold">Recovery mix</p>
+              <p className="text-[0.625rem] text-muted-foreground">
+                active customers by recovery status
+              </p>
+            </div>
+            {charts === null && !chartsError ? (
+              <div className="flex items-center gap-4">
+                <Skeleton className="size-48 shrink-0 rounded-full" />
+                <div className="flex flex-1 flex-col gap-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} className="h-3 w-full" />
+                  ))}
+                </div>
+              </div>
+            ) : charts && charts.recovery.length > 0 ? (
+              <MixDonut
+                data={charts.recovery.map((slice) => ({
+                  key: slice.key,
+                  label: slice.label,
+                  count: slice.count,
+                  secondary: slice.outstanding,
+                }))}
+                fillFor={(key) => RECOVERY_FILL[key] ?? "var(--chart-3)"}
+                formatSecondary={(slice) => `due ${formatCurrency(slice.secondary)}`}
+                centerWord="customers"
+              />
+            ) : (
+              <p className="py-16 text-center text-xs text-muted-foreground">
+                No active customers yet.
+              </p>
+            )}
+          </Card>
+        </motion.div>
+
+        <motion.div variants={staggerItem} className="min-w-0">
+          <Card className="h-full gap-3">
+            <div className="flex flex-col gap-0.5">
+              <p className="text-xs font-semibold">Collection progress</p>
+              <p className="text-[0.625rem] text-muted-foreground">
+                what came back of everything lent
+              </p>
+            </div>
+            {stats && !loading ? (
+              <CollectionBar
+                summary={{
+                  totalLent: stats.totalLent,
+                  totalReceived: stats.totalCollected,
+                  due: stats.totalOutstanding,
+                  dueStatus: dueStatusOf(stats.totalOutstanding),
+                }}
+              />
+            ) : (
+              <div className="flex flex-col gap-4">
+                <Skeleton className="h-9 w-48" />
+                <Skeleton className="h-3 w-full" />
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <Skeleton className="h-14" />
+                  <Skeleton className="h-14" />
+                  <Skeleton className="h-14" />
+                </div>
+              </div>
+            )}
+          </Card>
+        </motion.div>
+      </div>
+
+      {chartsError && !loading && (
+        <p className="text-center font-mono text-[0.625rem] uppercase tracking-[0.15em] text-destructive">
+          charts: {chartsError}
+        </p>
+      )}
 
       {/* Recent activity + top dues */}
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
@@ -221,8 +367,8 @@ export function OverviewView() {
                     >
                       <div className="min-w-0">
                         <p className="truncate text-xs font-medium">{t.customerName}</p>
-                        <p className="text-[0.625rem] text-muted-foreground">
-                          {formatDate(t.date)} · {t.method === "mobile-banking" ? "mobile banking" : t.method}
+                        <p className="truncate text-[0.625rem] text-muted-foreground">
+                          {formatDate(t.date)} · {methodLabel(t.method)}
                           {t.note ? ` · ${t.note}` : ""}
                         </p>
                       </div>

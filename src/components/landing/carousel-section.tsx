@@ -48,7 +48,7 @@ const SLIDES = [
  */
 export function CarouselSection() {
   return (
-    <section className="border-b bg-linear-to-b from-[oklch(0.972_0.014_178)] via-background to-background">
+    <section className="border-b bg-linear-to-b from-accent via-background to-background">
       <Container className="py-16 sm:py-24">
         <Reveal>
           <SectionHeading

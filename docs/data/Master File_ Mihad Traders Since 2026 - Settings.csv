@@ -1,0 +1,9 @@
+Transaction Type,Customer Status,Business Type,Recovery Status,Risk Level
+Credit,Active,Workshop,Not Contacted,Low
+Payment,Paid,Contractor,Contacted,Medium
+,Disputed,Retail Shop,Promise Made,High
+,Not Found,Company,Partial Payment,Critical
+,Legal Action,Individual,Completed,
+,,,Refused,
+,,,Disputed,
+,,,Legal Action,

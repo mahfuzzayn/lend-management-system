@@ -3,6 +3,7 @@ import type {
   Customer,
   CustomerDetail,
   CustomerWithDue,
+  OverviewCharts,
   OverviewStats,
   Paginated,
   TransactionWithCustomer,
@@ -74,6 +75,18 @@ function qs(params: object): string {
 export interface CustomerListParams {
   search?: string;
   status?: "active" | "archived" | "all";
+  riskLevel?: "low" | "medium" | "high" | "critical";
+  recoveryStatus?:
+    | "not-contacted"
+    | "contacted"
+    | "promise-made"
+    | "partial-payment"
+    | "completed"
+    | "refused"
+    | "disputed"
+    | "legal-action";
+  /** true = list soft-deleted rows only (Trash view, §5.7). */
+  trash?: boolean;
   page?: number;
   limit?: number;
 }
@@ -83,15 +96,35 @@ export interface TransactionListParams {
   type?: "lend" | "repayment";
   from?: string;
   to?: string;
+  /** true = list soft-deleted rows only (Trash view, §5.7). */
+  trash?: boolean;
   page?: number;
   limit?: number;
 }
 
 export interface CustomerInput {
   name: string;
-  phone: string;
+  customerCode?: string;
+  phone?: string;
+  businessName?: string;
+  alternativePhone?: string;
   email?: string;
   address?: string;
+  area?: string;
+  businessType?: "" | "workshop" | "contractor" | "retail-shop" | "company" | "individual";
+  customerCategory?: string;
+  customerSince?: string;
+  riskLevel?: "" | "low" | "medium" | "high" | "critical";
+  recoveryStatus?:
+    | ""
+    | "not-contacted"
+    | "contacted"
+    | "promise-made"
+    | "partial-payment"
+    | "completed"
+    | "refused"
+    | "disputed"
+    | "legal-action";
   notes?: string;
 }
 
@@ -102,6 +135,11 @@ export interface TransactionInput {
   date: string;
   method: "cash" | "bank" | "mobile-banking" | "other";
   note?: string;
+  addedBy?: string;
+  referenceCode?: string;
+  productCategory?: string;
+  verificationStatus?: string;
+  referenceSource?: string;
 }
 
 export const api = {
@@ -119,8 +157,17 @@ export const api = {
   getCustomer: (id: string) => request<CustomerDetail>("GET", `/api/customers/${id}`),
   updateCustomer: (id: string, patch: Partial<CustomerInput>) =>
     request<Customer>("PATCH", `/api/customers/${id}`, patch),
-  deleteCustomer: (id: string) =>
-    request<{ id: string; transactionsDeleted: number }>("DELETE", `/api/customers/${id}`),
+  /** Soft delete → Trash (§5.7). `{ purge: true }` needs a super admin. */
+  deleteCustomer: (id: string, opts?: { purge?: boolean }) =>
+    request<{ id: string; transactionsTrashed?: number; transactionsDeleted?: number; purged?: boolean }>(
+      "DELETE",
+      `/api/customers/${id}${opts?.purge ? "?purge=true" : ""}`
+    ),
+  restoreCustomer: (id: string) =>
+    request<{ customer: Customer; transactionsRestored: number }>(
+      "POST",
+      `/api/customers/${id}/restore`
+    ),
 
   // transactions
   listTransactions: (params: TransactionListParams) =>
@@ -129,11 +176,31 @@ export const api = {
     request<TransactionWithCustomer>("POST", "/api/transactions", input),
   updateTransaction: (id: string, patch: Partial<TransactionInput>) =>
     request<TransactionWithCustomer>("PATCH", `/api/transactions/${id}`, patch),
-  deleteTransaction: (id: string) =>
-    request<{ id: string }>("DELETE", `/api/transactions/${id}`),
+  /** Soft delete → Trash (§5.7). `{ purge: true }` needs a super admin. */
+  deleteTransaction: (id: string, opts?: { purge?: boolean }) =>
+    request<{ id: string; purged?: boolean }>(
+      "DELETE",
+      `/api/transactions/${id}${opts?.purge ? "?purge=true" : ""}`
+    ),
+  restoreTransaction: (id: string) =>
+    request<TransactionWithCustomer>("POST", `/api/transactions/${id}/restore`),
 
   // aggregates
-  dues: (params: { search?: string; onlyWithDue?: boolean }) =>
-    request<CustomerWithDue[]>("GET", `/api/dues${qs(params)}`),
+  dues: (params: {
+    search?: string;
+    onlyWithDue?: boolean;
+    riskLevel?: "low" | "medium" | "high" | "critical";
+    recoveryStatus?:
+      | "not-contacted"
+      | "contacted"
+      | "promise-made"
+      | "partial-payment"
+      | "completed"
+      | "refused"
+      | "disputed"
+      | "legal-action";
+  }) => request<CustomerWithDue[]>("GET", `/api/dues${qs(params)}`),
   overview: () => request<OverviewStats>("GET", "/api/overview"),
+  overviewCharts: (granularity: "week" | "month" | "year" = "month") =>
+    request<OverviewCharts>("GET", `/api/overview/charts?granularity=${granularity}`),
 };

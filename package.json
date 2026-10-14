@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "seed": "node scripts/seed.ts",
+    "import-csv": "node scripts/import-mihad-csv.ts",
     "lint": "eslint"
   },
   "dependencies": {

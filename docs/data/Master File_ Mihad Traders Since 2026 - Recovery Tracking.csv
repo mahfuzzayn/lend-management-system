@@ -1,0 +1,13 @@
+Recovery ID,Customer ID,Contact Date,Contact Person,Contact Method,Discussion Summary,Promise Amount,Promise Date,Recovery Status,Next Follow-up Date,Notes,,,,,
+,,,,,,,,,,,,,,Column,Purpose
+,,,,,,,,,,,,,,Recovery ID,REC0001
+,,,,,,,,,,,,,,Customer ID,Customer
+,,,,,,,,,,,,,,Contact Date,When contacted
+,,,,,,,,,,,,,,Contact Person,Who talked
+,,,,,,,,,,,,,,Contact Method,Call/Visit/Message
+,,,,,,,,,,,,,,Discussion Summary,What happened
+,,,,,,,,,,,,,,Promise Amount,Amount they promised
+,,,,,,,,,,,,,,Promise Date,Expected payment date
+,,,,,,,,,,,,,,Recovery Status,Follow-up/Paid/Refused
+,,,,,,,,,,,,,,Next Follow-up Date,Next action
+,,,,,,,,,,,,,,Notes,Additional details

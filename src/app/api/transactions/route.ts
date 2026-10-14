@@ -14,13 +14,14 @@ import {
 import { requireSession } from "@/lib/auth";
 import { customerSummary } from "@/lib/domain";
 import { toTransactionDomain, withCustomerName } from "@/lib/serialize";
+import { liveFilter, trashFilter } from "@/lib/trash";
 import { connectToDatabase } from "@/lib/db";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * GET /api/transactions - newest-first ledger with customer names.
- * Query: customerId, type, from, to (inclusive), page, limit.
+ * Query: customerId, type, from, to (inclusive), trash (§5.7), page, limit.
  */
 export async function GET(request: NextRequest) {
   return withApi(async () => {
@@ -31,7 +32,9 @@ export async function GET(request: NextRequest) {
     const page = intParam(params.get("page"), 1, 1);
     const limit = intParam(params.get("limit"), 15, 1, 100);
 
-    const filter: Record<string, unknown> = {};
+    // Trash mode shows soft-deleted entries only (§5.7).
+    const filter: Record<string, unknown> =
+      params.get("trash") === "true" ? trashFilter() : liveFilter();
 
     const customerId = params.get("customerId");
     if (customerId) {
@@ -75,10 +78,12 @@ export async function GET(request: NextRequest) {
     const scope = await TransactionModel.find(filter);
     const scopeSummary = customerSummary(scope.map(toTransactionDomain));
 
-    const customers = await CustomerModel.find({}, "name");
-    const nameById = new Map(customers.map((c) => [String(c._id), c.name]));
+    const customers = await CustomerModel.find({}, "name customerCode");
+    const customerById = new Map(
+      customers.map((c) => [String(c._id), { name: c.name, code: c.customerCode ?? undefined }])
+    );
 
-    const items = withCustomerName(docs.map(toTransactionDomain), nameById);
+    const items = withCustomerName(docs.map(toTransactionDomain), customerById);
     return apiSuccess({
       items,
       page,
@@ -100,23 +105,40 @@ export async function POST(request: NextRequest) {
     await connectToDatabase();
 
     const raw = (await readJson(request)) as Record<string, unknown> | null;
-    // Optional fields default: the shared schema types method/note as strings
+    // Optional fields default: the shared schema types the extras as strings
     // (the form always sends them), but the API accepts omission (§5.3).
-    const parsed = transactionSchema.safeParse({ method: "cash", note: "", ...(raw ?? {}) });
+    const parsed = transactionSchema.safeParse({
+      method: "cash",
+      note: "",
+      addedBy: session.name, // business-level "who recorded it" (§5.3)
+      referenceCode: "",
+      productCategory: "",
+      verificationStatus: "",
+      referenceSource: "",
+      ...(raw ?? {}),
+    });
     if (!parsed.success) throw new ApiError(422, zodMessage(parsed.error));
 
     const customer = await CustomerModel.findById(parsed.data.customerId);
     if (!customer) throw new ApiError(422, "That customer does not exist.");
+    if (customer.deletedAt) {
+      throw new ApiError(422, "That customer is in the trash - restore them first.");
+    }
 
-    const { type, amount, date, method, note } = parsed.data;
+    const v = parsed.data;
     const doc = await TransactionModel.create({
       customerId: customer._id,
-      type,
-      amount: mongoose.Types.Decimal128.fromString(String(amount)),
+      type: v.type,
+      amount: mongoose.Types.Decimal128.fromString(String(v.amount)),
       // Form dates are plain YYYY-MM-DD → UTC midnight keeps them stable.
-      date: new Date(`${date}T00:00:00.000Z`),
-      method,
-      note: note || undefined,
+      date: new Date(`${v.date}T00:00:00.000Z`),
+      method: v.method,
+      note: v.note || undefined,
+      addedBy: v.addedBy || undefined,
+      referenceCode: v.referenceCode || undefined,
+      productCategory: v.productCategory || undefined,
+      verificationStatus: v.verificationStatus || undefined,
+      referenceSource: v.referenceSource || undefined,
       createdBy: new mongoose.Types.ObjectId(session.sub),
     });
 

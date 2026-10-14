@@ -135,6 +135,9 @@ export function Header() {
               <span className="font-mono text-[0.625rem] font-normal text-muted-foreground">
                 {admin?.email ?? ""}
               </span>
+              <span className="font-mono text-[0.5625rem] uppercase tracking-[0.15em] text-muted-foreground">
+                {admin?.role === "super-admin" ? "super admin" : "admin"}
+              </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} variant="destructive" disabled={loggingOut}>

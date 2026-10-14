@@ -24,8 +24,8 @@ export function Logo({
       <span
         aria-hidden
         className={cn(
-          "flex size-6 shrink-0 items-center justify-center bg-linear-to-br from-[oklch(0.585_0.095_172)] to-[oklch(0.415_0.078_182)] text-[0.625rem] font-bold text-primary-foreground",
-          inverted && "from-[oklch(0.985_0.005_180)] to-[oklch(0.92_0.02_178)] text-foreground",
+          "flex size-6 shrink-0 items-center justify-center bg-linear-to-br from-(--grad-from) to-(--grad-to) text-[0.625rem] font-bold text-primary-foreground",
+          inverted && "from-[oklch(0.985_0.005_272)] to-[oklch(0.92_0.02_272)] text-foreground",
           className
         )}
       >

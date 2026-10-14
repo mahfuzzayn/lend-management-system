@@ -18,6 +18,7 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-chart-6: var(--chart-6);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -50,38 +51,49 @@
 
 :root {
   --background: oklch(1 0 0);
-  --foreground: oklch(0.16 0.01 180);
+  --foreground: oklch(0.16 0.01 270);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.16 0.01 180);
+  --card-foreground: oklch(0.16 0.01 270);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.16 0.01 180);
-  /* Teal-green theme (review fix F5) with gradient accents in @layer base */
-  --primary: oklch(0.51 0.096 175);
-  --primary-foreground: oklch(0.985 0.005 180);
-  --secondary: oklch(0.965 0.008 180);
-  --secondary-foreground: oklch(0.28 0.04 178);
-  --muted: oklch(0.968 0.006 178);
-  --muted-foreground: oklch(0.52 0.03 178);
-  --accent: oklch(0.962 0.015 180);
-  --accent-foreground: oklch(0.35 0.06 175);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.918 0.008 178);
-  --input: oklch(0.918 0.008 178);
-  --ring: oklch(0.6 0.09 175);
-  --chart-1: oklch(0.869 0.005 56.366);
-  --chart-2: oklch(0.553 0.013 58.071);
-  --chart-3: oklch(0.444 0.011 73.639);
-  --chart-4: oklch(0.374 0.01 67.558);
-  --chart-5: oklch(0.268 0.007 34.298);
+  --popover-foreground: oklch(0.16 0.01 270);
+  /* Brand trio (works.md F21) - re-theme the app by editing these three
+     (plus the tint hue in the neutral tokens below). Nothing else hardcodes
+     a brand color: gradients and charts derive from here. */
+  --brand-primary: oklch(0.307 0.195 269.5); /* #15088f */
+  --brand-secondary: oklch(0.607 0.247 28.9); /* #f30608 */
+  --brand-accent: oklch(0.307 0.197 269.4); /* #150590 */
+  /* Shared gradient stops - every gradient in the app references these. */
+  --grad-from: var(--brand-primary);
+  --grad-via: color-mix(in oklab, var(--brand-accent), var(--brand-secondary) 38%);
+  --grad-to: color-mix(in oklab, var(--brand-accent), var(--brand-secondary) 62%);
+  --primary: var(--brand-primary);
+  --primary-foreground: oklch(0.985 0.005 269);
+  --secondary: oklch(0.965 0.008 272);
+  --secondary-foreground: oklch(0.28 0.04 272);
+  --muted: oklch(0.968 0.006 272);
+  --muted-foreground: oklch(0.52 0.03 272);
+  --accent: oklch(0.962 0.015 272);
+  --accent-foreground: oklch(0.35 0.09 270);
+  --destructive: var(--brand-secondary);
+  --border: oklch(0.918 0.008 272);
+  --input: oklch(0.918 0.008 272);
+  --ring: oklch(0.45 0.16 272);
+  /* Categorical chart ramp - indigo-anchored, CVD/contrast validated (F21). */
+  --chart-1: #4338ca;
+  --chart-2: #eb6834;
+  --chart-3: #0e9f86;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #008300;
   --radius: 0;
-  --sidebar: oklch(0.982 0.008 178);
-  --sidebar-foreground: oklch(0.16 0.01 180);
-  --sidebar-primary: oklch(0.51 0.096 175);
-  --sidebar-primary-foreground: oklch(0.985 0.005 180);
-  --sidebar-accent: oklch(0.962 0.015 180);
-  --sidebar-accent-foreground: oklch(0.35 0.06 175);
-  --sidebar-border: oklch(0.918 0.008 178);
-  --sidebar-ring: oklch(0.6 0.09 175);
+  --sidebar: oklch(0.982 0.008 272);
+  --sidebar-foreground: oklch(0.16 0.01 270);
+  --sidebar-primary: var(--brand-primary);
+  --sidebar-primary-foreground: oklch(0.985 0.005 269);
+  --sidebar-accent: oklch(0.962 0.015 272);
+  --sidebar-accent-foreground: oklch(0.35 0.09 270);
+  --sidebar-border: oklch(0.918 0.008 272);
+  --sidebar-ring: oklch(0.45 0.16 272);
 }
 
 .dark {
@@ -103,11 +115,12 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.553 0.013 58.071);
-  --chart-1: oklch(0.869 0.005 56.366);
-  --chart-2: oklch(0.553 0.013 58.071);
-  --chart-3: oklch(0.444 0.011 73.639);
-  --chart-4: oklch(0.374 0.01 67.558);
-  --chart-5: oklch(0.268 0.007 34.298);
+  --chart-1: #4338ca;
+  --chart-2: #eb6834;
+  --chart-3: #0e9f86;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #008300;
   --sidebar: oklch(0.216 0.006 56.043);
   --sidebar-foreground: oklch(0.985 0.001 106.423);
   --sidebar-primary: oklch(0.623 0.214 259.815);
@@ -137,32 +150,34 @@
   }
 }
 
-/* ---- Gradient system (review fix F5) ------------------------------------ */
+/* ---- Gradient system (works.md F21) -------------------------------------
+   Every stop color-mixes from the brand trio, so changing --brand-* in :root
+   re-themes buttons, cards, bands, and accents together. */
 
-/* Primary buttons: teal gradient, brighter on hover */
+/* Primary buttons: lifted brand gradient, brighter on hover */
 [data-slot="button"][data-variant="default"] {
   background-image: linear-gradient(
     140deg,
-    oklch(0.585 0.095 172) 0%,
-    oklch(0.485 0.088 177) 55%,
-    oklch(0.415 0.078 182) 100%
+    color-mix(in oklab, var(--brand-primary), white 16%) 0%,
+    var(--brand-primary) 55%,
+    var(--brand-accent) 100%
   );
 }
 [data-slot="button"][data-variant="default"]:hover {
   background-image: linear-gradient(
     140deg,
-    oklch(0.625 0.1 172) 0%,
-    oklch(0.525 0.093 177) 55%,
-    oklch(0.45 0.083 182) 100%
+    color-mix(in oklab, var(--brand-primary), white 26%) 0%,
+    color-mix(in oklab, var(--brand-primary), white 6%) 55%,
+    color-mix(in oklab, var(--brand-accent), var(--brand-secondary) 14%) 100%
   );
 }
 
-/* Cards: a whisper of teal at the top, fading out */
+/* Cards: a whisper of the brand at the top, fading out */
 [data-slot="card"] {
   background-image: linear-gradient(
     180deg,
-    oklch(0.965 0.018 178 / 0.9) 0%,
-    oklch(1 0 0 / 0) 36%
+    color-mix(in oklab, var(--brand-primary) 5%, var(--card)) 0%,
+    var(--card) 36%
   );
 }
 

@@ -16,6 +16,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useSignedIn } from "@/hooks/use-signed-in";
 import { APP_NAME } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ const LINKS = [
 export function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const signedIn = useSignedIn();
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur-sm">
@@ -53,8 +55,10 @@ export function Navbar() {
         </nav>
 
         <div className="hidden md:block">
-          <Button asChild size="sm">
-            <Link href="/login">Sign in</Link>
+          <Button asChild size="lg">
+            <Link href={signedIn ? "/dashboard/overview" : "/login"}>
+              {signedIn ? "Dashboard" : "Sign in"}
+            </Link>
           </Button>
         </div>
 
@@ -87,9 +91,12 @@ export function Navbar() {
                   {link.label}
                 </Link>
               ))}
-              <Button asChild className="mt-6">
-                <Link href="/login" onClick={() => setOpen(false)}>
-                  Sign in
+              <Button asChild size="lg" className="mt-6">
+                <Link
+                  href={signedIn ? "/dashboard/overview" : "/login"}
+                  onClick={() => setOpen(false)}
+                >
+                  {signedIn ? "Dashboard" : "Sign in"}
                 </Link>
               </Button>
             </nav>

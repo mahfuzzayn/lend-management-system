@@ -1,17 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
+import { CustomerPicker } from "@/components/shared/customer-picker";
+import { DatePickerField } from "@/components/shared/date-picker";
 import { Button } from "@/components/ui/button";
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -30,14 +26,91 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api, errorMessage } from "@/lib/api-client";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, methodLabel } from "@/lib/utils";
 import { fieldErrors, transactionSchema } from "@/schemas";
 import type { Customer, PaymentMethod, Transaction, TransactionType } from "@/types";
 
 const METHODS: PaymentMethod[] = ["cash", "bank", "mobile-banking", "other"];
+/** Fixed staff suggestions for "Added by" (works.md F20) - free text stays allowed. */
+const ADDED_BY_CHOICES = ["Mahfuz Zayn", "Murshad Milad", "Mihad Ahmod"];
 /** Local-calendar today (YYYY-MM-DD) - en-CA yields ISO order. UTC-based
  *  toISOString would block the user's real "today" after ~6 pm in UTC+6. */
 const TODAY = () => new Date().toLocaleDateString("en-CA");
+
+/**
+ * Free-text input with a fixed suggestion dropdown (works.md F20): pick a
+ * known name or type anything. The list renders INSIDE the dialog content
+ * (no portal), so stacking with the modal is a non-issue.
+ */
+function AddedByField({
+  value,
+  onChange,
+  invalid,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  invalid: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const suggestions = ADDED_BY_CHOICES.filter(
+    (name) =>
+      name.toLowerCase().includes(value.trim().toLowerCase()) &&
+      name.toLowerCase() !== value.trim().toLowerCase()
+  );
+
+  return (
+    <div className="relative flex flex-col gap-2">
+      <Label htmlFor="transaction-added-by">
+        Added by <span className="text-muted-foreground">(optional)</span>
+      </Label>
+      <div className="relative">
+        <Input
+          id="transaction-added-by"
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          placeholder="Defaults to you"
+          aria-invalid={invalid}
+          autoComplete="off"
+          className="pr-8"
+        />
+        <button
+          type="button"
+          aria-label="Suggested names"
+          aria-expanded={open && suggestions.length > 0}
+          onMouseDown={(e) => e.preventDefault()} // keep the input's focus
+          onClick={() => setOpen((next) => !next)}
+          className="absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        >
+          <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} className="size-3.5" />
+        </button>
+        {open && suggestions.length > 0 && (
+          <div className="absolute top-full right-0 left-0 z-30 mt-1 border bg-popover p-1 shadow-md">
+            {suggestions.map((name) => (
+              <button
+                key={name}
+                type="button"
+                // Prevent the input's blur so the click lands.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(name);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface TransactionFormDialogProps {
   open: boolean;
@@ -46,6 +119,8 @@ interface TransactionFormDialogProps {
   transaction?: Transaction | null;
   /** When set (customer detail quick-add), the customer is locked to this one. */
   fixedCustomer?: Customer | null;
+  /** Label for the picker when editing (code + name), so it never shows bare ids. */
+  customerLabel?: string;
   /** Called after a successful save so the caller can refetch. */
   onSaved?: () => void;
 }
@@ -59,6 +134,7 @@ export function TransactionFormDialog({
   onOpenChange,
   transaction,
   fixedCustomer,
+  customerLabel,
   onSaved,
 }: TransactionFormDialogProps) {
   return (
@@ -76,6 +152,7 @@ export function TransactionFormDialog({
           key={transaction?.id ?? (fixedCustomer ? `fixed-${fixedCustomer.id}` : "new")}
           transaction={transaction ?? null}
           fixedCustomer={fixedCustomer ?? null}
+          customerLabel={customerLabel}
           onOpenChange={onOpenChange}
           onSaved={onSaved}
         />
@@ -87,50 +164,29 @@ export function TransactionFormDialog({
 function TransactionForm({
   transaction,
   fixedCustomer,
+  customerLabel,
   onOpenChange,
   onSaved,
 }: {
   transaction: Transaction | null;
   fixedCustomer: Customer | null;
+  customerLabel?: string;
   onOpenChange: (open: boolean) => void;
   onSaved?: () => void;
 }) {
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const editing = Boolean(transaction);
-
-  // Customer picker options - only needed when the customer is pickable.
-  useEffect(() => {
-    if (fixedCustomer) return;
-    let cancelled = false;
-    api
-      .listCustomers({ limit: 100 })
-      .then((result) => {
-        if (!cancelled) setCustomers(result.items);
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) toast.error("Couldn't load customers.", { description: errorMessage(error) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [fixedCustomer]);
 
   const [customerId, setCustomerId] = useState(
     () => transaction?.customerId ?? fixedCustomer?.id ?? ""
   );
   const [type, setType] = useState<TransactionType>(() => transaction?.type ?? "lend");
   const [amount, setAmount] = useState(() => (transaction ? String(transaction.amount) : ""));
-  const [date, setDate] = useState(() => transaction?.date ?? TODAY());
+  const [date, setDate] = useState(() => transaction?.date.slice(0, 10) ?? TODAY());
   const [method, setMethod] = useState<PaymentMethod>(() => transaction?.method ?? "cash");
   const [note, setNote] = useState(() => transaction?.note ?? "");
+  const [addedBy, setAddedBy] = useState(() => transaction?.addedBy ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
-
-  // The list endpoint returns active customers by default.
-  const customerNameById = useMemo(
-    () => new Map(customers.map((c) => [c.id, c.name])),
-    [customers]
-  );
 
   function clearError(field: string) {
     setErrors((e) => {
@@ -157,6 +213,7 @@ function TransactionForm({
       date,
       method,
       note,
+      addedBy,
     });
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error));
@@ -192,7 +249,7 @@ function TransactionForm({
       {fixedCustomer ? (
         <div className="flex flex-col gap-2">
           <Label>Customer</Label>
-          <div className="flex h-8 items-center justify-between border bg-muted/40 px-2.5">
+          <div className="flex h-9 items-center justify-between border bg-muted/40 px-2.5">
             <span className="text-xs font-medium">{fixedCustomer.name}</span>
             <span className="font-mono text-[0.625rem] uppercase tracking-wider text-muted-foreground">
               locked
@@ -202,31 +259,16 @@ function TransactionForm({
       ) : (
         <div className="flex flex-col gap-2">
           <Label htmlFor="transaction-customer">Customer</Label>
-          <Combobox
+          <CustomerPicker
+            id="transaction-customer"
             value={customerId}
-            onValueChange={(v) => {
-              setCustomerId(String(v));
+            selectedLabel={customerLabel}
+            onChange={(v) => {
+              setCustomerId(v);
               clearError("customerId");
             }}
-            itemToStringLabel={(v) => customerNameById.get(String(v)) ?? ""}
-          >
-            <ComboboxInput
-              id="transaction-customer"
-              placeholder="Search or pick a customer…"
-              className="w-full"
-              aria-invalid={Boolean(errors.customerId)}
-            />
-            <ComboboxContent>
-              <ComboboxList>
-                {customers.map((c) => (
-                  <ComboboxItem key={c.id} value={c.id}>
-                    {c.name}
-                  </ComboboxItem>
-                ))}
-                <ComboboxEmpty>No customer matches.</ComboboxEmpty>
-              </ComboboxList>
-            </ComboboxContent>
-          </Combobox>
+            aria-invalid={Boolean(errors.customerId)}
+          />
           {errors.customerId && (
             <p className="text-[0.625rem] text-destructive">{errors.customerId}</p>
           )}
@@ -290,37 +332,46 @@ function TransactionForm({
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="transaction-date">Date</Label>
-          <Input
-            id="transaction-date"
-            type="date"
-            value={date}
-            max={TODAY()}
-            onChange={(e) => {
-              setDate(e.target.value);
-              clearError("date");
-            }}
-            aria-invalid={Boolean(errors.date)}
-          />
-          {errors.date && <p className="text-[0.625rem] text-destructive">{errors.date}</p>}
-        </div>
+        <DatePickerField
+          id="transaction-date"
+          label="Date"
+          value={date}
+          onChange={(v) => {
+            setDate(v);
+            clearError("date");
+          }}
+          max={TODAY()}
+          aria-invalid={Boolean(errors.date)}
+        />
       </div>
+      {errors.date && <p className="-mt-2 text-[0.625rem] text-destructive">{errors.date}</p>}
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="transaction-method">Method</Label>
-        <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
-          <SelectTrigger id="transaction-method">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {METHODS.map((m) => (
-              <SelectItem key={m} value={m} className="capitalize">
-                {m === "mobile-banking" ? "Mobile banking" : m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="transaction-method">Method</Label>
+          <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
+            <SelectTrigger id="transaction-method" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {METHODS.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {methodLabel(m)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <AddedByField
+          value={addedBy}
+          onChange={(next) => {
+            setAddedBy(next);
+            clearError("addedBy");
+          }}
+          invalid={Boolean(errors.addedBy)}
+        />
+        {errors.addedBy && <p className="-mt-2 text-[0.625rem] text-destructive">{errors.addedBy}</p>}
       </div>
 
       <div className="flex flex-col gap-2">
