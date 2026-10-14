@@ -13,11 +13,11 @@ import { Container } from "@/components/shared/container";
 import { Reveal, Stagger, StaggerItem } from "@/components/shared/reveal";
 import { Card } from "@/components/ui/card";
 import { SectionHeading } from "@/components/landing/section-heading";
+import { APP_NAME } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "About",
-  description:
-    "Why Lendbook exists - a private, minimal ledger for people who lend money and want their dues computed, not guessed.",
+  description: `Why ${APP_NAME} exists - a private, minimal ledger for people who lend money and want their dues computed, not guessed.`,
 };
 
 const AUDIENCE: { icon: IconSvgElement; title: string; body: string }[] = [
@@ -66,9 +66,9 @@ export default function AboutPage() {
         <Container className="py-16 sm:py-24">
           <Reveal className="max-w-2xl">
             <SectionHeading
-              kicker="About Lendbook"
+              kicker={`About ${APP_NAME}`}
               title="Built for one careful lender."
-              description="Most lending software is built for institutions - branches, officers, interest schedules. Lendbook is built for the opposite: one person, lending their own money, who simply wants the arithmetic to be right."
+              description={`Most lending software is built for institutions - branches, officers, interest schedules. ${APP_NAME} is built for the opposite: one person, lending their own money, who simply wants the arithmetic to be right.`}
             />
           </Reveal>
         </Container>

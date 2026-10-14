@@ -1,22 +1,78 @@
 # Fixes
 
-_(empty - round F8-F22 delivered 2026-10-14; see # Completed)_
+_(empty - project closed as v2 FINAL 2026-10-14 after rounds F1-F28; v3 opens a fresh cycle - see # Backlog and goals.md "v3 Kickoff")_
 
 <!-- Brand palette for this round (works.md #14):
      Primary: #15088f, Secondary: #f30608, Accent: #150590 -->
 
-# Backlog (memo — noted 2026-10-13)
+# Backlog (v3 — picked up next)
 
-User's own updates & modifications — applied later by the user, NOT part of current phase work.
-When one is picked up it goes through `requirements.md` → `goals.md` first.
+When one is picked up it goes through `requirements.md` → a fresh goal list first
+(per requirements §13 / goals.md "v3 Kickoff").
 
-1. **DB models — new features/fields** (user to specify; candidate pool lives in requirements §15:
+1. **Full design upgrade from a reference image** — the owner's noted v3 opener: total UI
+   redesign (landing + dashboard) inspired by a reference design; layout, typography, and
+   motion system rebuilt while the data model + API stay.
+2. **DB models — new features/fields** (user to specify; candidate pool lives in requirements §15:
    interest/EMI, audit log, receipts, reminders…).
-2. **UI design update** — some sections still read "AI-generic"; push editorial distinctiveness
-   per requirements §9.1 (asymmetric compositions, specific copy, refined motion).
-3. **Feature improvements** — general feature polish/upgrades; list to be defined by the user.
+3. **Recovery Tracking module + Record Reference module** — CSV schemas already sit in docs/data.
+4. **Feature improvements** — general feature polish/upgrades; list to be defined by the user.
 
 # Completed
+
+## Round F26-F28 — v2 closeout (2026-10-14)
+
+1. **F26 (works.md#1)** Trash cascade edge cases —
+   - The delete-customer dialog now ALWAYS states the real number of transactions that will
+     follow the customer into the trash (fetches the count when the caller doesn't know it),
+     plus the rule in words ("the transactions come back only with the customer").
+   - Cascade-deleted entries can no longer be restored while their customer is trashed:
+     the API answers 422 "Their customer is still in the trash - restore the customer first."
+     (§5.7 restore-order rule), and the trash view marks those rows **"owner trashed"** with
+     the restore button disabled - so no live entry can ever sit under a trashed owner in
+     dues/totals (the "trashed customer showing with active data" path is closed).
+   - Customer restore still brings back exactly the cascade (verified: 2/2), purge still
+     hard-cascades. Verified E2E on a scratch lifecycle; real data untouched.
+2. **F27 (works.md#2)** `src/lib/project.ts` — the one-file business identity: brand name,
+   tagline, description, logo (path + alt + fallback initial), contact channels
+   (e-mail/response/location). `lib/config.ts` derives `APP_*` from it; the contact page
+   (channels + mailto link), about page, features copy, marquee label, Logo component, and
+   the PDF logo all render from it. Clone recipe (edit file → drop logo → set `--brand-*`
+   trio) documented in-file and in requirements §9.2/§12; `NEXT_PUBLIC_APP_NAME` removed as
+   unused. (The owner test-drove it by renaming the brand mid-review and reverting.)
+3. **F28 (works.md#3)** Project finalized as **v2 FINAL** — requirements v1.5 (restore-order
+   rule §5.7, contact block FR-6.2, project-config §9.2/§12, v3 outlook §15); goals.md gained
+   the detailed post-v2 retrospective (phases R1-R5 covering the v1 review fixes, F1-F7
+   real-data round, F8-F22 hardening, F23-F25 runtime regressions, F26-F28 closeout) and a
+   **"v3 Kickoff"** section pointing where the next chat starts (full design upgrade from
+   the owner's reference image + dashboard redesign); works.md/progress.md closed;
+   summarized-chat.md rewritten as the v3 handoff.
+4. **F-VERIFY** lint 0/0 + tsc clean + build green; two browser E2E suites 24/24 with the DB
+   asserted back to baseline after every run (95 customers / 186 transactions, trash empty).
+
+## Round F23-F25 (2026-10-14)
+
+1. **F23 (works.md#1)** Dead Add/Edit forms — the client-side `safeParse` failed on v1.3 schema
+   keys the dialogs never sent (customers: `customerCode`, `customerCategory`; transactions:
+   `referenceCode`, `productCategory`, `verificationStatus`, `referenceSource`) with no error
+   slots rendered, so every submit silently no-opped (no toast, no network call). Forms now
+   default those keys to `""` before parsing, mirroring the API's edge pattern (§5.2/§5.3).
+   Verified E2E: add + edit customer and transaction all persist, toast, and close.
+2. **F24 (works.md#2)** Customer picker in dialogs — the portaled popover sat outside the
+   dialog's scroll lock (react-remove-scroll cancels wheel events over portaled content, which
+   is why scrollbar-drag worked but wheel didn't). The picker now detects it is inside a
+   `[data-slot="dialog-content"]` and renders its panel **in-place** (no portal, F15/F20
+   pattern) so wheel/touch scrolling works; the page filter keeps the portaled popover.
+   The trigger now names the picked row (`C023 · Goura Babu`) instead of the generic
+   "Selected customer", so a click visibly selects. Escape closes the picker first, then the
+   dialog (window-capture guard - radix's dialog escape listener runs before React's).
+3. **F25 (works.md#3)** Customer detail Contact block — phones render as `tel:` links
+   (calling-app hand-off) and e-mail as `mailto:`, each row with an icon chip and a one-click
+   copy button (clipboard + success toast + tick feedback). Replaces the plain-text phone line
+   and the e-mail `<dl>` row; "No contact on file" when empty.
+4. **F-VERIFY** lint 0/0 + tsc clean + build green; full browser E2E (Playwright + system
+   Chrome) 12/12: scratch-row create/edit/purge round-trips with DB counts asserted back to
+   baseline (95 total / 94 live customers, 184 transactions).
 
 ## Round F8-F22 (2026-10-14)
 

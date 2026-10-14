@@ -1,9 +1,10 @@
 # Goals - Step-by-Step Execution Plan (Zero → End)
 
-> ✅ **COMPLETE — 2026-10-13.** All 74 goals across 17 phases done and verified;
-> v2 deployed at https://lendbook.morlabs.co. Future work starts new goal lists
-> (features/fixes) per the workflow in requirements §13 - never append v3 scope
-> to this file's phases.
+> ✅ **v2 BUILD COMPLETE — 2026-10-13** (74 goals, 17 phases below) ·
+> ✅ **v2 CLOSED FINAL — 2026-10-14** after fix rounds F1-F28 (retrospective
+> below). Future work starts new goal lists (features/fixes) per the workflow
+> in requirements §13 - never append v3 scope to the build phases. **Where v3
+> picks up: see "v3 kickoff" at the bottom of this file.**
 
 Generated from `docs/requirements.md` v1.1 (§13.3). This is the build checklist.
 
@@ -143,3 +144,108 @@ Generated from `docs/requirements.md` v1.1 (§13.3). This is the build checklist
 - [x] G-72 MongoDB Atlas database + user; connection string into Vercel env vars
 - [x] G-73 Deploy to Vercel (production), seed prod admin, set all env vars
 - [x] G-74 Production smoke test vs §14.2 → mark v2 complete → **ask user to push final state to GitHub**
+
+---
+
+# Post-v2 Retrospective - Fix & Update Rounds (what we did, phase by phase)
+
+The 17 phases above built v1 → v2. Everything after the deploy was delivered
+as works.md fix rounds; this section records them as phases so the project's
+full history reads in one place (works.md #3, F28). Each round was verified
+per the standing rules (lint + tsc + build; runtime E2E from F23 on) and
+logged line-by-line in `progress.md`.
+
+## Phase R1 - v1 Design Review Fixes (2026-08-19/20)
+
+User design pass over the static prototype: x-axis padding sweep across
+landing/dashboard cards (incl. the tilted hero card), Practice-carousel border
+overflow fix, sidebar "Home" + logo→overview routing fix (one active route at
+a time), PDF table padding, teal theme + gradient system (later superseded by
+F21), hero marquee band, Home testimonials section, logo image with gradient
+"L" fallback. Exit: v1 approved → v2 authorized.
+
+## Phase R2 - Real-Data Round F1-F7 (2026-10-13, requirements v1.3)
+
+- **Data model to the master sheet:** Customer gains customerCode (C001…,
+  auto-generated, sparse-unique), business name/type, area, customer category,
+  alternative phone, customer-since, risk level, recovery status; phone now
+  optional + sparse-unique. Transaction gains addedBy, TRX referenceCode
+  (non-unique), product category, verification, reference source.
+- **CSV import** (`scripts/import-mihad-csv.ts`): 94 customers + 78 sheet
+  transactions + per-customer opening-balance rows (§5.6 math) so derived dues
+  match the real ledger; additive, --dry-run, guarded; messy-sheet fixes
+  (C002/C003 duplicate, TRX002 typo, quote-stripped phones).
+- **Exports:** CSV (BOM, RFC-4180, master-sheet columns) + JSON on customers,
+  transactions, dues, and the customer detail payload (`lib/export.ts` +
+  shared ExportMenu).
+- **UX:** searchable server-side customer picker; shadcn Calendar DatePicker;
+  "Cash"/"Mobile banking" labels via one `methodLabel()`; responsive sweep.
+
+## Phase R3 - Product Hardening F8-F22 (2026-10-14, requirements v1.4)
+
+- **RBAC + Trash (F8):** Admin roles (admin / super-admin) in the JWT; soft
+  delete with cascade (shared timestamp), restore, super-admin purge; trash
+  views on customers + transactions; trashed rows reject edits/appends.
+- **Analytics (F9, F17):** `/api/overview/charts` + lazy charts - money in/out
+  bars with week/month/year toggle, recovery donut, collection progress bar;
+  customer detail gains its own insight charts from the same calculators.
+- **Finding things (F11, F13):** server-side search over
+  code/name/business/phone/alt-phone/area + risk/recovery filters; DatePicker
+  with month/year dropdowns + manual DD/MM/YYYY entry.
+- **Craft (F10, F12, F14-F16, F18-F20, F22):** listbox-grade picker
+  (keyboard + focus discipline), themed 404, scrollable dialogs, named
+  greeting, suggested added-by, row action hit areas, detail-page responsive
+  fixes, collapsible icon-rail sidebar.
+- **Brand (F21):** palette re-theme to the owner's trio (#15088f / #f30608 /
+  #150590) as `--brand-*` tokens; every gradient derives from shared stops;
+  chart ramp re-validated (CVD + contrast).
+
+## Phase R4 - Runtime Regression Round F23-F25 (2026-10-14, requirements v1.5)
+
+Caught by the owner in production (R3 shipped lint/tsc/build-only):
+- **F23:** Add/Edit dialogs silently died - client-side `safeParse` rejected
+  the v1.3 schema extras the forms never sent (customer:
+  customerCode/customerCategory; transaction: referenceCode/productCategory/
+  verificationStatus/referenceSource) with no error slots rendered. Forms now
+  default those keys before parsing, mirroring the API.
+- **F24:** the transaction dialog's customer list couldn't wheel-scroll - the
+  portaled popover sits outside the dialog's scroll lock (react-remove-scroll
+  cancels wheel over portaled content). The picker now renders its panel
+  in-place inside dialogs (page filter keeps the portal) and the trigger names
+  the picked row; Escape closes the picker before the dialog.
+- **F25:** customer detail contact block - tel:/mailto: links + one-click copy.
+  Verified: full browser E2E (Playwright + system Chrome), 12/12 checks with
+  scratch rows purged and DB counts asserted back to baseline.
+
+## Phase R5 - Closeout F26-F28 (2026-10-14, requirements v1.5 - v2 FINAL)
+
+- **F26:** Trash cascade rules end-to-end - delete-customer modal always
+  states the real transaction count (fetched when unknown); cascade-deleted
+  entries restore only after their customer (API 422 + "owner trashed" marker
+  with restore disabled in the trash view) so no live entry can sit under a
+  trashed owner.
+- **F27:** `src/lib/project.ts` - the one-file business identity (brand,
+  logo, contact channels); config/landing/about/contact/marquee/features/
+  Logo/PDF all render from it. Clone recipe documented in-file and in
+  requirements §9.2/§12.
+- **F28:** project finalized as **v2 FINAL** - this retrospective, the
+  requirements v1.5 revision, works.md/progress.md closeout, and the handoff
+  doc updated for the next chat.
+
+---
+
+# v3 Kickoff - where the next chat starts work
+
+**v3 is a NEW feature cycle** (fresh requirements revision + new goal list per
+§13 - not appended above). The owner's first noted item:
+
+1. **Full design upgrade guided by a reference image** - total UI redesign
+   (landing + dashboard) inspired by the owner's reference design; layout,
+   typography, and motion system rebuilt while the data model and API stay.
+   Backlog candidates that may ride along: Recovery Tracking module and
+   Record Reference module (CSV schemas already in `docs/data/`), further
+   DB-model features (interest/EMI, audit log - requirements §15).
+
+State at handoff: production https://lendbook.morlabs.co, real data live
+(95 customers / 184 transactions / 1 trashed), everything verified, tree
+clean apart from this round - user pushes manually.

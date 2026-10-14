@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -35,7 +35,26 @@ export function DeleteCustomerDialog({
   onDeleted,
 }: DeleteCustomerDialogProps) {
   const [pending, setPending] = useState(false);
+  // The cascade warning should always carry the real count (works.md #1);
+  // list callers don't have it, so fetch it once per customer when missing.
+  const [fetchedCount, setFetchedCount] = useState<number | null>(null);
   const open = Boolean(customer);
+
+  useEffect(() => {
+    if (!customer || transactionCount !== undefined) return;
+    let cancelled = false;
+    api
+      .listTransactions({ customerId: customer.id, limit: 1 })
+      .then((result) => {
+        if (!cancelled) setFetchedCount(result.total);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [customer, transactionCount]);
+
+  const count = transactionCount ?? fetchedCount;
 
   async function handleConfirm() {
     if (!customer) return;
@@ -85,19 +104,20 @@ export function DeleteCustomerDialog({
             {purge ? (
               <>
                 This removes the customer
-                {transactionCount
-                  ? ` and their ${transactionCount} transaction${transactionCount > 1 ? "s" : ""}`
+                {count !== null
+                  ? ` and their ${count} transaction${count > 1 ? "s" : ""}`
                   : " and their transaction history"}{" "}
                 for good - nothing can bring them back.
               </>
             ) : (
               <>
                 They leave every list and total now
-                {transactionCount
-                  ? `, together with their ${transactionCount} transaction${transactionCount > 1 ? "s" : ""}`
+                {count !== null
+                  ? `, together with their ${count} transaction${count > 1 ? "s" : ""}`
                   : ", together with their transaction history"}
-                , and wait in the trash where any admin can restore them. Only a
-                super admin can delete permanently.
+                , and wait in the trash where any admin can restore them - the
+                transactions come back only with the customer. Only a super
+                admin can delete permanently.
               </>
             )}
           </AlertDialogDescription>

@@ -206,7 +206,14 @@ function TransactionForm({
       return;
     }
 
+    // Optional extras default to empty, mirroring the API's parse (§5.3): the
+    // schema types them as strings, so a form that omits them would fail
+    // validation on keys the UI never shows (works.md #1).
     const parsed = transactionSchema.safeParse({
+      referenceCode: "",
+      productCategory: "",
+      verificationStatus: "",
+      referenceSource: "",
       customerId,
       type,
       amount: amountNumber,

@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Image from "next/image";
 
+import { PROJECT } from "@/lib/project";
 import { cn } from "@/lib/utils";
 
 /**
- * Brand mark — /public/images/logo.png when it loads, falling back to the
- * classic gradient "L" block if the image is missing or fails (review fix F8).
+ * Brand mark — the owner's logo (lib/project.ts) when it loads, falling back
+ * to the gradient initial block if the image is missing or fails (review fix F8).
  */
 export function Logo({
   className,
@@ -29,15 +30,15 @@ export function Logo({
           className
         )}
       >
-        L
+        {PROJECT.brand.logo.fallbackText}
       </span>
     );
   }
 
   return (
     <Image
-      src="/images/logo.png"
-      alt="Lendbook logo"
+      src={PROJECT.brand.logo.src}
+      alt={PROJECT.brand.logo.alt}
       width={96}
       height={96}
       priority

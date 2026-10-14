@@ -58,7 +58,7 @@ export function toTransactionDomain(doc: TransactionDocument): Transaction {
  */
 export function withCustomerName(
   transactions: Transaction[],
-  customerById: Map<string, { name: string; code?: string }>
+  customerById: Map<string, { name: string; code?: string; deleted?: boolean }>
 ): TransactionWithCustomer[] {
   return transactions.map((t) => {
     const customer = customerById.get(t.customerId);
@@ -66,6 +66,9 @@ export function withCustomerName(
       ...t,
       customerName: customer?.name ?? "Unknown",
       customerCode: customer?.code,
+      // True for entries that left the ledger WITH a trashed customer (§5.7):
+      // they restore only after the customer is back (works.md #1).
+      customerDeleted: customer?.deleted ?? false,
     };
   });
 }

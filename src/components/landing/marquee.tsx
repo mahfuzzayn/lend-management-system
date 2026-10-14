@@ -1,3 +1,5 @@
+import { APP_NAME } from "@/lib/config";
+
 const ITEMS = [
   "Customers",
   "Lends",
@@ -35,7 +37,7 @@ function Row({ ariaHidden = false }: { ariaHidden?: boolean }) {
 export function Marquee() {
   return (
     <section
-      aria-label="What Lendbook tracks"
+      aria-label={`What ${APP_NAME} tracks`}
       className="overflow-hidden border-y bg-linear-to-r from-(--grad-from) via-(--grad-via) to-(--grad-to) py-3"
     >
       <div className="animate-marquee flex w-max">

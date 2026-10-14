@@ -152,7 +152,10 @@ function CustomerForm({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const parsed = customerSchema.safeParse(values);
+    // Optional extras default to empty, mirroring the API's parse (§5.2): the
+    // schema types them as strings, so a form that omits them would fail
+    // validation on keys the UI never shows (works.md #1).
+    const parsed = customerSchema.safeParse({ customerCode: "", customerCategory: "", ...values });
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error));
       return;

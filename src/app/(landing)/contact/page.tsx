@@ -7,28 +7,32 @@ import { SectionHeading } from "@/components/landing/section-heading";
 import { Container } from "@/components/shared/container";
 import { Reveal } from "@/components/shared/reveal";
 import { Card } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/config";
+import { PROJECT } from "@/lib/project";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description:
-    "Questions about Lendbook? Write to us - we reply within one working day.",
+  description: `Questions about ${APP_NAME}? Write to us - we reply ${PROJECT.contact.responseTime.toLowerCase()}.`,
 };
 
+// The business's own channels render from lib/project.ts (works.md F27) -
+// cloning for another owner never touches this page.
 const CHANNELS = [
   {
     icon: Mail02Icon,
     label: "E-mail",
-    value: "support@lendbook.morlabs.co",
+    value: PROJECT.contact.email,
+    href: `mailto:${PROJECT.contact.email}`,
   },
   {
     icon: Time04Icon,
     label: "Response time",
-    value: "Within one working day",
+    value: PROJECT.contact.responseTime,
   },
   {
     icon: Location02Icon,
     label: "Based in",
-    value: "Sylhet, Bangladesh",
+    value: PROJECT.contact.location,
   },
 ];
 
@@ -48,11 +52,20 @@ export default function ContactPage() {
                 <span className="flex size-10 shrink-0 items-center justify-center border bg-background">
                   <HugeiconsIcon icon={channel.icon} strokeWidth={1.75} className="size-4.5" />
                 </span>
-                <div>
+                <div className="min-w-0">
                   <p className="font-mono text-[0.625rem] uppercase tracking-[0.2em] text-muted-foreground">
                     {channel.label}
                   </p>
-                  <p className="text-sm font-medium">{channel.value}</p>
+                  {"href" in channel && channel.href ? (
+                    <a
+                      href={channel.href}
+                      className="text-sm font-medium underline-offset-4 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                    >
+                      {channel.value}
+                    </a>
+                  ) : (
+                    <p className="text-sm font-medium">{channel.value}</p>
+                  )}
                 </div>
               </li>
             ))}

@@ -78,9 +78,12 @@ export async function GET(request: NextRequest) {
     const scope = await TransactionModel.find(filter);
     const scopeSummary = customerSummary(scope.map(toTransactionDomain));
 
-    const customers = await CustomerModel.find({}, "name customerCode");
+    const customers = await CustomerModel.find({}, "name customerCode deletedAt");
     const customerById = new Map(
-      customers.map((c) => [String(c._id), { name: c.name, code: c.customerCode ?? undefined }])
+      customers.map((c) => [
+        String(c._id),
+        { name: c.name, code: c.customerCode ?? undefined, deleted: Boolean(c.deletedAt) },
+      ])
     );
 
     const items = withCustomerName(docs.map(toTransactionDomain), customerById);

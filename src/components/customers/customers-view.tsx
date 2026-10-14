@@ -460,7 +460,7 @@ export function CustomersView({ role }: { role: AdminRole }) {
             </p>
             <p className="max-w-xs text-xs text-muted-foreground">
               {showTrash
-                ? "Deleted customers wait here until a super admin removes them for good."
+                ? "Deleted customers wait here until they have been removed for good."
                 : searching
                   ? "Try a different name, phone number or area."
                   : "Add your first customer - a name and phone number is enough to start a ledger."}
@@ -517,11 +517,13 @@ export function CustomersView({ role }: { role: AdminRole }) {
         </>
       )}
       <DeleteCustomerDialog
+        key={`soft-${deleting?.id ?? "none"}`}
         customer={deleting}
         onOpenChange={(open) => !open && setDeleting(null)}
         onDeleted={reload}
       />
       <DeleteCustomerDialog
+        key={`purge-${purging?.id ?? "none"}`}
         customer={purging}
         purge
         onOpenChange={(open) => !open && setPurging(null)}

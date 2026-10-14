@@ -11,10 +11,14 @@ import {
   Add01Icon,
   ArrowLeft01Icon,
   ArrowTurnBackwardIcon,
+  Call02Icon,
+  Copy01Icon,
   Delete01Icon,
   Download04Icon,
   Edit01Icon,
   LeftToRightListBulletIcon,
+  Mail01Icon,
+  Tick02Icon,
 } from "@hugeicons/core-free-icons";
 
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog";
@@ -74,6 +78,70 @@ type LoadState =
   | { phase: "error"; message: string }
   | { phase: "not-found" }
   | { phase: "ready"; data: CustomerDetail };
+
+/**
+ * One contact row (works.md #3): the value is a link that hands off to the
+ * calling or mail app (tel:/mailto:), with a copy button beside it so the
+ * number or address can go straight to the clipboard.
+ */
+function ContactRow({
+  icon,
+  href,
+  value,
+  copyLabel,
+}: {
+  icon: typeof Call02Icon;
+  href: string;
+  value: string;
+  copyLabel: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+      toast.success(`${copyLabel} copied.`, { description: value });
+    } catch {
+      toast.error("Couldn't copy.", { description: "Select the text and copy it manually." });
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex size-7 shrink-0 items-center justify-center border bg-muted/40 text-muted-foreground">
+        <HugeiconsIcon icon={icon} strokeWidth={2} className="size-3.5" />
+      </span>
+      <a
+        href={href}
+        className="min-w-0 flex-1 wrap-break-word font-mono text-xs underline-offset-4 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+      >
+        {value}
+      </a>
+      <Button
+        variant="outline"
+        size="icon-sm"
+        className="shrink-0"
+        onClick={() => {
+          void copy();
+        }}
+        aria-label={`Copy ${copyLabel.toLowerCase()}`}
+      >
+        <HugeiconsIcon
+          icon={copied ? Tick02Icon : Copy01Icon}
+          strokeWidth={2}
+          className={cn("size-3", copied && "text-emerald-600")}
+        />
+      </Button>
+    </div>
+  );
+}
+
+/** tel: hrefs carry digits (and a leading +) only - no spaces or dashes. */
+function telHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
+}
 
 export function CustomerDetailView({
   customerId,
@@ -303,10 +371,6 @@ export function CustomerDetailView({
                     {customer.businessName}
                   </p>
                 )}
-                <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                  {customer.phone ?? "no phone on file"}
-                  {customer.alternativePhone ? ` · ${customer.alternativePhone}` : ""}
-                </p>
                 {(customer.riskLevel || customer.recoveryStatus) && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {customer.riskLevel && (
@@ -332,11 +396,45 @@ export function CustomerDetailView({
               </div>
             </div>
 
+            {/* Contact (works.md #3) - phones dial, e-mail composes, copy is
+                one click. Kept visually loud: icon chip + link + button. */}
+            {customer.phone || customer.alternativePhone || customer.email ? (
+              <div className="flex flex-col gap-1.5 border-t pt-4">
+                <p className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
+                  Contact
+                </p>
+                {customer.phone && (
+                  <ContactRow
+                    icon={Call02Icon}
+                    href={telHref(customer.phone)}
+                    value={customer.phone}
+                    copyLabel="Phone number"
+                  />
+                )}
+                {customer.alternativePhone && (
+                  <ContactRow
+                    icon={Call02Icon}
+                    href={telHref(customer.alternativePhone)}
+                    value={customer.alternativePhone}
+                    copyLabel="Alternative phone"
+                  />
+                )}
+                {customer.email && (
+                  <ContactRow
+                    icon={Mail01Icon}
+                    href={`mailto:${customer.email}`}
+                    value={customer.email}
+                    copyLabel="E-mail address"
+                  />
+                )}
+              </div>
+            ) : (
+              <p className="border-t pt-4 font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
+                No contact on file
+              </p>
+            )}
+
             <dl className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-2 border-t pt-4 text-xs">
-              <dt className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
-                E-mail
-              </dt>
-              <dd className="wrap-break-word">{customer.email ?? "-"}</dd>
               <dt className="font-mono text-[0.625rem] uppercase tracking-[0.15em] text-muted-foreground">
                 Address
               </dt>

@@ -8,6 +8,7 @@ import {
 import { Container } from "@/components/shared/container";
 import { Reveal, Stagger, StaggerItem } from "@/components/shared/reveal";
 import { Card } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/config";
 import { SectionHeading } from "./section-heading";
 
 const FEATURES: { icon: IconSvgElement; num: string; title: string; body: string }[] = [
@@ -15,7 +16,7 @@ const FEATURES: { icon: IconSvgElement; num: string; title: string; body: string
     icon: UserAccountIcon,
     num: "01",
     title: "Customers, not contacts",
-    body: "A name and a phone number is all it takes. Lendbook keeps each person's full lending history, notes, and current standing - searchable in a few keystrokes.",
+    body: `A name and a phone number is all it takes. ${APP_NAME} keeps each person's full lending history, notes, and current standing - searchable in a few keystrokes.`,
   },
   {
     icon: Money02Icon,

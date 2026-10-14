@@ -6,18 +6,20 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
+import { PROJECT } from "@/lib/project";
 import type { Customer, CustomerSummary, TransactionWithBalance } from "@/types";
 
 /**
  * Declarative PDF for one customer's complete current history (requirements
- * §10, v1.3): Lendbook logo + teal brand palette, full master-sheet columns.
- * Rendered to a Blob client-side via `pdf()` - never in the DOM tree.
+ * §10, v1.3): owner logo + brand palette (lib/project.ts + globals.css),
+ * full master-sheet columns. Rendered to a Blob client-side via `pdf()` -
+ * never in the DOM tree.
  *
  * Note: built-in PDF fonts are WinAnsi-encoded and cannot render the ৳ glyph,
  * so amounts inside the PDF use the "BDT" prefix (UI keeps ৳).
  */
 
-// Lendbook brand (globals.css tokens, oklch -> hex): primary teal, deep teal,
+// Brand hexes (globals.css tokens, oklch -> hex): primary + accent indigo,
 // whisper tint; semantic red/green/blue stay for due/repayment/advance.
 const BRAND = "#15088f"; // --brand-primary
 const DEEP = "#150590"; // --brand-accent (headings, rules)
@@ -117,7 +119,7 @@ export function CustomerHistoryDocument({
           <View style={styles.brandRow}>
             {/* react-pdf Image (not a DOM img) - its props carry no alt. */}
             {/* eslint-disable-next-line jsx-a11y/alt-text */}
-            <Image style={styles.logo} src="/images/logo.png" />
+            <Image style={styles.logo} src={PROJECT.brand.logo.src} />
             <View>
               <Text style={styles.brand}>{appName}</Text>
               <Text style={styles.brandSub}>Customer Lending History</Text>

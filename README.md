@@ -50,7 +50,7 @@ Sign in at `/login` with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you seeded.
 | `JWT_SECRET` | server | ≥ 32 random chars - `openssl rand -base64 48` |
 | `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | seed | consumed by `npm run seed` |
 | `ADMIN_ROLE` | seed | `super-admin` (default) or `admin` for the seeded admin (RBAC) |
-| `NEXT_PUBLIC_APP_NAME` | client | display name ("Lendbook") |
+| `NEXT_PUBLIC_APP_NAME` | client | legacy/unused - the display name comes from `src/lib/project.ts` (v1.5) |
 
 `.env` is git-ignored; `.env.example` documents every variable.
 

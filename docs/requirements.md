@@ -2,9 +2,9 @@
 
 | Field    | Value                                                       |
 | -------- | ----------------------------------------------------------- |
-| Version  | 1.4                                                         |
+| Version  | 1.5                                                         |
 | Date     | 2026-10-14                                                  |
-| Status   | v1 + v2 delivered - production: https://lendbook.morlabs.co |
+| Status   | **v2 FINAL** - production: https://lendbook.morlabs.co (fix rounds F1-F28 delivered; v3 is a new feature cycle, §15) |
 | Owner    | Mahfuz Zayn                                                 |
 | Repo     | `lend-management-system` (Next.js 16.3.1)                   |
 
@@ -15,10 +15,19 @@
 > v1.4 (works.md fix round F8-F16): RBAC roles (Admin / Super Admin) with a
 > soft-delete Trash (restore + super-admin purge), overview charts, richer
 > search filters, date-picker month/year dropdowns + manual entry, 404 page.
-> v1.4 (works.md fix round F17-F21): chart granularity toggle + per-customer
+> v1.4 (works.md fix round F17-F22): chart granularity toggle + per-customer
 > charts + collection bar, scrollable dialogs, named greeting, suggested
 > added-by, brand-token palette (#15088f / #f30608 / #150590) driving every
-> gradient.
+> gradient, collapsible sidebar.
+
+> v1.5 (works.md fix round F23-F25): dead Add/Edit forms fixed (forms now
+> default the v1.3 schema extras before client-side parse), customer picker
+> renders in-place inside dialogs (wheel-scrollable) and names the picked row,
+> customer-detail contact block (tel:/mailto: links + copy buttons).
+> v1.5 (works.md fix round F26-F28): Trash cascade rules enforced end-to-end
+> (delete modal always shows the real transaction count, cascade-deleted
+> entries restore only after their customer), `lib/project.ts` one-file brand
+> clone point, project closed out as v2 FINAL.
 
 > This document is the single source of truth. It will be **executed** to build the project.
 > Any scope change must be reflected here first, then in `goals.md`.
@@ -318,7 +327,14 @@ Safety net against mistaken deletes: removing data is two-stage.
 - **Restore (Admin and Super Admin):** `POST /api/<entity>/[id]/restore`
   clears `deletedAt`/`deletedBy`. Restoring a customer also restores exactly
   the transactions that were cascade-deleted with it (matched by the shared
-  `deletedAt`).
+  `deletedAt`). **Restore order (v1.5, works.md F26):** an entry that left the
+  ledger with a trashed customer restores only AFTER that customer - the
+  transaction restore endpoint answers `422` ("restore the customer first")
+  while the owner sits in the Trash, and the trash view marks those rows
+  ("owner trashed") with the restore action disabled, so no live entry can
+  ever sit under a trashed customer in dues or totals. The delete-customer
+  dialog always states the real transaction count it will cascade (fetched
+  when the caller doesn't know it).
 - **Purge (Super Admin only):** `DELETE …?purge=true` removes the document
   permanently (customer purge cascades a hard delete of all its transactions).
   Admins attempting it get `403`.
@@ -427,13 +443,17 @@ Auth: cookie session (JWT, httpOnly). Unauthenticated → `401`. Invalid input �
 
 ### FR-6 Customer Detail (`/dashboard/customers/[id]`)
 1. Profile card (code, name, business name, phones, e-mail, address, area, business type, risk/recovery, notes, created date) + Edit / Delete actions.
-2. Summary cards: Total Lent, Total Received, **Current Due** (badge).
-3. Full transaction history table - date, type badge, method, note, added by, amount, **running balance** - sorted oldest → newest.
-4. **Download history** as PDF (FR-9), or as CSV/JSON of the same customer payload (FR-9b).
-5. Quick "Add Transaction" for this customer (Dialog, pre-filled customer).
-6. **Insight charts (v1.4, works.md F17):** the customer's money in/out bars (with the week/month/year toggle), a payment-method mix donut, and the collection progress bar - computed client-side from the ledger payload through the shared calculators, lazy-loaded with skeletons.
-7. Unknown id → friendly "Customer not found" state.
-8. Fully responsive - the primary daily surface on phones.
+2. **Contact block (v1.5, works.md F25):** phones and e-mail render as a
+   visibly actionable list - each row is a `tel:` / `mailto:` link (calling /
+   mail app hand-off) with an icon chip and a one-click copy button (clipboard
+   + toast + tick feedback). "No contact on file" placeholder when empty.
+3. Summary cards: Total Lent, Total Received, **Current Due** (badge).
+4. Full transaction history table - date, type badge, method, note, added by, amount, **running balance** - sorted oldest → newest.
+5. **Download history** as PDF (FR-9), or as CSV/JSON of the same customer payload (FR-9b).
+6. Quick "Add Transaction" for this customer (Dialog, pre-filled customer).
+7. **Insight charts (v1.4, works.md F17):** the customer's money in/out bars (with the week/month/year toggle), a payment-method mix donut, and the collection progress bar - computed client-side from the ledger payload through the shared calculators, lazy-loaded with skeletons.
+8. Unknown id → friendly "Customer not found" state.
+9. Fully responsive - the primary daily surface on phones.
 
 ### FR-7 Transaction Management (`/dashboard/transactions`)
 1. Table: date, customer (code + name, link), type badge (lend = red/out, repayment = green/in), method (label-cased), note, added by, amount, row actions (edit / delete).
@@ -517,6 +537,14 @@ Auth: cookie session (JWT, httpOnly). Unauthenticated → `401`. Invalid input �
 
 ### 9.2 Foundations
 - **Font:** Inter (Next.js default) - system fallback.
+- **Business identity (v1.5, works.md F27):** everything the UI shows as "the
+  company" - brand name, tagline, description, logo path, contact channels -
+  lives in ONE static file, `src/lib/project.ts` (`PROJECT`). `lib/config.ts`
+  derives `APP_NAME`/`APP_TAGLINE`/`APP_DESCRIPTION` from it, and the landing
+  pages, Logo component, dashboard chrome, and the PDF render from those. The
+  clone recipe for a new owner: edit `lib/project.ts`, drop their logo at
+  `brand.logo.src`, set the `--brand-*` trio in `globals.css`. Nothing else
+  hardcodes the identity.
 - **Palette (v1.4, works.md F21):** defined once in `globals.css` as the **brand trio** - `--brand-primary` `#15088f` (deep indigo), `--brand-secondary` `#f30608` (signal red), `--brand-accent` `#150590` - from which `--primary`, `--destructive`, and the tinted neutrals derive. Re-theming = editing those three (+ the tint hue), nothing else. Semantic only: red = due/lend-out, green = settled/repayment-in, blue = advance.
 - **Gradients:** every gradient (primary buttons, active sidebar chip, marquee, CTA band, login brand panel, testimonial avatars, logo block, hero/404 accents, the card whisper tint) references the shared `--grad-from/--grad-via/--grad-to` stops, which `color-mix` from the brand trio - so gradients always follow the palette.
 - **Radius:** `0` (sharp/editorial - radix-mira default).
@@ -579,9 +607,11 @@ Generated client-side with **React PDF Renderer** (`@react-pdf/renderer`): the d
 | `JWT_SECRET` | server | ≥ 32 random chars |
 | `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | seed script | First admin; also the v1 demo credential |
 | `ADMIN_ROLE` | seed script | `admin` or `super-admin` (default) for the seeded admin (v1.4) |
-| `NEXT_PUBLIC_APP_NAME` | client | "Lend Management System" |
 
-`src/lib/config.ts` holds non-secret client constants: app name, currency symbol. `.env.example` committed and documented in README.
+Brand identity (name, tagline, logo, contact channels) is **not** env-driven:
+it lives in the static `src/lib/project.ts` (v1.5 clone point, §9.2);
+`src/lib/config.ts` derives the display constants from it and holds the
+currency symbol. `.env.example` committed and documented in README.
 
 **Seed:** `npm run seed` (or `scripts/seed.ts`) - creates the admin from env; `--demo` flag optionally inserts sample customers/transactions.
 
@@ -663,6 +693,14 @@ One line per completed task, newest at the bottom:
 
 ## 15. Out of Scope / Future Enhancements
 
+> **v3 outlook (v2 closed 2026-10-14):** the next cycle is feature work, not
+> fixes - the owner's first noted item is a **full design upgrade guided by a
+> reference image** (total UI + dashboard redesign; requirements §9.1's
+> "editorial distinctiveness" pushed further), plus the Backlog candidates
+> below. v3 scope starts as a fresh requirements revision + a NEW goal list
+> per §13 - never appended to the v2 build phases.
+
+- **Full UI redesign** inspired by the owner's reference image (v3 kickoff candidate) - landing + dashboard visual overhaul, layout/typography/motion system, keeping the current data model and API
 - Additional roles beyond Admin / Super Admin (staff, multi-tenant, read-only viewers)
 - Interest, EMI schedules, reminders (SMS/e-mail/WhatsApp)
 - Contact-form message storage or e-mail delivery
@@ -670,6 +708,7 @@ One line per completed task, newest at the bottom:
 - Dark mode, i18n, multi-currency
 - Receipt printing, customer-facing portal
 - Full audit log (who changed what beyond the delete markers)
+- Recovery Tracking module + Record Reference module (CSV schemas already in docs/data, §5.6)
 
 ---
 

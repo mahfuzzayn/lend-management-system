@@ -99,6 +99,8 @@ export interface TransactionWithBalance extends Transaction {
 export interface TransactionWithCustomer extends Transaction {
   customerName: string;
   customerCode?: string;
+  /** Owner customer sits in the trash - the entry restores only after them (§5.7). */
+  customerDeleted?: boolean;
 }
 
 export interface CustomerSummary {

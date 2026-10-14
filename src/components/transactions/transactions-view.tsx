@@ -300,7 +300,17 @@ export function TransactionsView({ role }: { role: AdminRole }) {
                         href={`/dashboard/customers/${row.customerId}`}
                         className="flex flex-col"
                       >
-                        <span className="text-xs font-medium hover:underline">{row.customerName}</span>
+                        <span className="text-xs font-medium hover:underline">
+                          {row.customerName}
+                          {showTrash && row.customerDeleted && (
+                            <span
+                              title="Their customer is in the trash - restore the customer to bring these entries back"
+                              className="ml-1.5 font-mono text-[0.5625rem] uppercase tracking-[0.15em] text-amber-700"
+                            >
+                              owner trashed
+                            </span>
+                          )}
+                        </span>
                         {row.customerCode && (
                           <span className="font-mono text-[0.625rem] uppercase tracking-wider text-muted-foreground">
                             {row.customerCode}
@@ -345,10 +355,19 @@ export function TransactionsView({ role }: { role: AdminRole }) {
                     <TableCell>
                       {showTrash ? (
                         <div className="flex justify-end gap-1">
+                          {/* Cascade-deleted entries restore only with their
+                              customer (§5.7) - the API rejects it, the button
+                              states why instead of failing on click. */}
                           <Button
                             variant="ghost"
                             className={rowActionClass}
-                            aria-label={`Restore entry of ${formatCurrency(row.amount)} for ${row.customerName}`}
+                            aria-label={
+                              row.customerDeleted
+                                ? `Restore their customer first to bring back the entry of ${formatCurrency(row.amount)} for ${row.customerName}`
+                                : `Restore entry of ${formatCurrency(row.amount)} for ${row.customerName}`
+                            }
+                            title={row.customerDeleted ? "Restore their customer first" : undefined}
+                            disabled={row.customerDeleted}
                             onClick={() => {
                               void handleRestore(row);
                             }}
